@@ -34,3 +34,29 @@ python3 PryfynMeth_Binomial.py -meta metadata.txt -platform nano -i Path_to_Inpu
 `-i` the path to a folder containing ONLY the files for binomial processing
 
 `-o` the name of the output folder
+
+# Filtering
+Once you have generated binomial results, you may wish to filter samples with low read count. The PryfynMeth_Filter.py command does just that. By setting a threshold it will output three folders. The first will be a full list of your sites in your binomial test output, but with the values and statistics adjusted considering your filtering. The second will be a folde of each sample's methylated sites (sites with FDR less than 0.05). The final, will scan each of your methylated site files, and will add genomic locations that have been excluded from other samples, making sure each sample has the same number of input site.
+
+```
+python PryfynMeth_Filter.py  -i Binomial_Results_Folder -f output_adjusted_sites -m output_pass_binomial -s output_shared_sites -threshold 10 -revert
+
+```
+
+`-i` An input folder which should be the output (-o) from the binomial step
+
+`-f` An output folder that will give a full list of sites, but with adjusted values. For example, if threshold is set at 10 and the site in question passes FDR but has fewer reads than 10, the reads, methylation count and non-methylation could will be set at 0, and the FDR will become 1 (failing). 
+
+`-m` An output folder that subsets each input file to only give methylated sites (ie those with an FDR less than 0.05).
+
+`-threshold` Anything lower than the number set here will convert the methylation count, non-methylation count and coverage numbers to 0, making the FDR fail.
+
+`-s` An output folder that subsets the input files, so that only rows that are methylated in at least one sample are kept. 
+
+`-revert` This is an optional tag. If included, sites which failed binomial but have over the threshold coverage will be reverted to their original input values. The logic for this is that by changing these values to 0, you may artificially be increasing the difference between samples and consequentially increase the number of differentially methylated sites. This example has threshold set at 10: 
+
+| Input  | Default | -revert |
+| ------------- | ------------- | -|
+| 1 / 9 (fail FDR) | 0/0  | 0/0 |
+| 1/20 (fail FDR)  | 0/0  | 1/20 |
+| 2/20 (pass FDR)  | 2/20  | 2/20 |

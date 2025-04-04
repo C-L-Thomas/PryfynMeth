@@ -62,10 +62,10 @@ python PryfynMeth_Filter.py  -i Binomial_Results_Folder -f output_adjusted_sites
 | 2/20 (pass FDR)  | 2/20  | 2/20 |
 
 # Statistics
-To obtain the percentage of methylated sites, level of methylation and the coverage, you can use PryfynMeth_Statistics.py. 
+To obtain the percentage of methylated sites, level of methylation and the coverage, you can use PryfynMeth_Statistics.py. The input folder (-i) can be your binomial test results, your filtered results, methylated sites results or shared CpG results (although the latter 2 won't give you measures as to how much of the unmethylated genome you're missing).
 
 ```
-python3 PryfynMeth_DSS_Prepare.py -i output_shared_sites -o DSS_folder
+python3 PryfynMeth_Statistics.py -i input_folder
 
 ```
 

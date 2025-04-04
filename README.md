@@ -60,3 +60,16 @@ python PryfynMeth_Filter.py  -i Binomial_Results_Folder -f output_adjusted_sites
 | 1 / 9 (fail FDR) | 0/0  | 0/0 |
 | 1/20 (fail FDR)  | 0/0  | 1/20 |
 | 2/20 (pass FDR)  | 2/20  | 2/20 |
+
+# Prepare For Differential Methylation Analysis
+
+For use with [DSS](https://www.bioconductor.org/packages/devel/bioc/vignettes/DSS/inst/doc/DSS.html), you can use the PryfynMeth_DSS_Prepare.py command on either your binomial, filtered, methylated or shared folders:
+
+```
+python3 PryfynMeth_DSS_Prepare.py -i output_shared_sites -o DSS_folder
+
+```
+
+`-i` An input folder with the desired files to be used for DSS (eg. -f, -m or -s output from PryfynMeth_Filter.py)
+
+`-o` An output folder for files in the DSS input format

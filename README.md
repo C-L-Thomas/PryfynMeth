@@ -27,7 +27,7 @@ To determine whether an individual site is methylated in whole genome methylatio
 python3 PryfynMeth_Binomial.py -meta metadata.txt -platform nano -i Path_to_Input_Folder/ -o Path_to_Output_Folder/
 ```
 
-`-meta` is the input file for your metadata table
+`-meta` is the input file for your metadata table. An example of the input metadata table can be found [here](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Nanopore_WorkFlow/Example_Nanopore_Metadata.txt)
 
 `-platform` illu for illumina inputs, nano for nanopore inputs
 

@@ -61,6 +61,14 @@ python PryfynMeth_Filter.py  -i Binomial_Results_Folder -f output_adjusted_sites
 | 1/20 (fail FDR)  | 0/0  | 1/20 |
 | 2/20 (pass FDR)  | 2/20  | 2/20 |
 
+# Statistics
+To obtain the percentage of methylated sites, level of methylation and the coverage, you can use PryfynMeth_Statistics.py. 
+
+```
+python3 PryfynMeth_DSS_Prepare.py -i output_shared_sites -o DSS_folder
+
+```
+
 # Prepare For Differential Methylation Analysis
 
 For use with [DSS](https://www.bioconductor.org/packages/devel/bioc/vignettes/DSS/inst/doc/DSS.html), you can use the PryfynMeth_DSS_Prepare.py command on either your binomial, filtered, methylated or shared folders:

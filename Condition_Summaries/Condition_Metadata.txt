@@ -1,0 +1,11 @@
+inputFile       condition
+Female_2_binomial_results.txt   1
+Female_3_binomial_results.txt   1
+Female_4_binomial_results.txt   1
+Female_5_binomial_results.txt   1
+Female_6_binomial_results.txt   1
+Male_2_binomial_results.txt     2
+Male_3_binomial_results.txt     2
+Male_4_binomial_results.txt     2
+Male_5_binomial_results.txt     2
+Male_6_binomial_results.txt     2

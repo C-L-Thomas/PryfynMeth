@@ -4,11 +4,11 @@ Welcome to the package PryfynMeth. This aims to be a toolkit to aid with the ana
 # Preprocessing
 PryfynMeth can accept three input file types; Nanopore MethylBed, Bismark bismark_methylation_extractor reports (bisulphite stranded), and Bismark coverage2cytosine cov files (bisulphite destranded). 
 
-## Whole Genome Bisulphite Sequencing
+## Preprocessing: Whole Genome Bisulphite Sequencing
 
 For Whole Genome Bisulphite Sequencing files, these scripts function with a particular output of the Bismark Aligner. The specific file type is generated using the Bismark `coverage2cytosine` command, and is a CpG_report file. This is designed for stranded data, but there is no reason it shouldn't work for destranded. An example workflow to generate this file type will be uploaded in future.
 
-## Nanopore Sequencing
+## Preprocessing: Nanopore Sequencing
 
 For Nanopore sequencing, these scripts function with the outputs of `modkit`. An example usage of modkit will be uploaded. There is a script included that can separate the methylation and hydroxymethylation into different files. This script `PryfynMeth_Nanopore_Separate.py` also adds rows which have 0 coverage in the nanopore bed files. This is important for ensuring the FDR calculation is equal for all samples. However, before running `PryfynMeth_Nanopore_Separate.py`, you must first generate a reference bed for your organism using modkit:
 

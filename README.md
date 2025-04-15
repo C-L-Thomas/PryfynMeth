@@ -6,10 +6,9 @@ PryfynMeth can accept three input file types; Nanopore [MethylBed](https://githu
 
 ## Preprocessing: Whole Genome Bisulphite Sequencing
 
-For Whole Genome Bisulphite Sequencing files, these scripts function with a particular output of the Bismark Aligner. There are two file type options; stranded and destranded. For stranded files, the file type is generated using Bismarks bismark_methylation_extractor command with the --report option. This will output a file that ends in *report.txt and is in [this]() format. 
+For Whole Genome Bisulphite Sequencing files, these scripts function with a particular output of the Bismark Aligner. There are two file type options; stranded and destranded. For stranded files, the file type is generated using Bismarks bismark_methylation_extractor command with the --report option. This will output a file that ends in *report.txt and is in [this](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_stranded.report.txt) format. This is the file input format for the binomial test 'PryfynMeth_Binomial.py'.
 
-
-The specific file type is generated using the Bismark `coverage2cytosine` command, and is a CpG_report file. This is designed for stranded data, but there is no reason it shouldn't work for destranded. An example workflow to generate this file type will be uploaded in future.
+If you wish to examine destranded data, the input file is different, and there will be an exra processing step to get the file in a similar format to stranded data. Destranded file types are *.cov output files from Bismark's coverage2cytosine command with the --merge_CpGs option used. This will generate files in [this]() format. 
 
 ## Preprocessing: Nanopore Sequencing
 

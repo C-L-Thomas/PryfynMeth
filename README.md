@@ -1,6 +1,9 @@
 # Background
 Welcome to the package PryfynMeth. This aims to be a toolkit to aid with the analysis of insect methylation data. We have included separate subfolders for workthroughs with Whole Genome Bisulphite Sequencing data and Nanopore sequencing data. 
 
+# Input Files
+PryfynMeth can accept three input file types; Nanopore MethylBed, Bismark bismark_methylation_extractor reports (bisulphite stranded), and Bismark coverage2cytosine cov files (bisulphite destranded). 
+
 # Preprocessing
 For Whole Genome Bisulphite Sequencing files, these scripts function with a particular output of the Bismark Aligner. The specific file type is generated using the Bismark `coverage2cytosine` command, and is a CpG_report file. This is designed for stranded data, but there is no reason it shouldn't work for destranded. An example workflow to generate this file type will be uploaded in future.
 

@@ -104,5 +104,5 @@ python3 PryfynMeth_DSS_Prepare.py -i output_shared_sites -o DSS_folder
 PryfynMeth_Condition_CpG_Mean.py takes an input [metadata](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Condition_Summaries/Condition_Metadata.txt) file with your sample conditions, and gives a mean (and SE) for each sites methylation. The output is a file with each CpG with each conditions mean and SE. It is advised the -f folder from PryfynMeth_Filter.py is used as the input.
 
 ```
-python3 PryfynMeth_Condition_CpG_Mean.py -i input_folder -meta condition_metadata.txt -o filename.tsv
+python3 PryfynMeth_Condition_CpG_Mean.py -i input_folder -meta condition_metadata.txt -o filename.tsv -g gene_info.txt
 ```

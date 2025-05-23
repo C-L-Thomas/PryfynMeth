@@ -1,7 +1,7 @@
 import os
 import argparse
 
-# Step 1: Filter based on total coverage threshold
+# Step 1: Filter based on total coverage and FDR
 def filter_file(input_path, output_path, threshold):
     with open(input_path, 'r') as infile, open(output_path, 'w') as outfile:
         header = infile.readline()
@@ -13,17 +13,23 @@ def filter_file(input_path, output_path, threshold):
                 continue
 
             try:
-                total = int(fields[5])
+                coverage = int(fields[5])
+                fdr = float(fields[7])  # FDR is in column 8 (index 7)
             except ValueError:
-                total = 0
+                coverage = 0
+                fdr = 1.0
 
-            if total < threshold:
+            if coverage < threshold:
+                # Zero everything
                 fields[3] = fields[4] = fields[5] = '0'
                 fields[6] = fields[7] = '1.0'
+            elif fdr >= 0.05:
+                # High FDR: zero unmethylated count only (column 4, index 3)
+                fields[3] = '0'
 
             outfile.write('\t'.join(fields) + '\n')
 
-# Step 2: Filter to only include significant rows (FDR < 0.05)
+# Step 2: Keep only rows with FDR < 0.05
 def methylation_significant_only(filtered_dir, output_dir_m):
     os.makedirs(output_dir_m, exist_ok=True)
 
@@ -50,9 +56,9 @@ def methylation_significant_only(filtered_dir, output_dir_m):
                 if fdr < 0.05:
                     outfile.write('\t'.join(fields) + '\n')
 
-# Helper: Extract chr:pos:strand as unique key
-def build_significant_shared_set(methylated_dir):
-    shared_keys = set()
+# Step 3a: Create combined key file from all significant sites
+def generate_combined_key_file(methylated_dir, output_path):
+    combined_keys = set()
     for filename in os.listdir(methylated_dir):
         if filename.startswith('.'):
             continue
@@ -63,65 +69,35 @@ def build_significant_shared_set(methylated_dir):
                 fields = line.strip().split('\t')
                 if len(fields) >= 3:
                     key = f"{fields[0]}:{fields[1]}:{fields[2]}"
-                    shared_keys.add(key)
-    return shared_keys
+                    combined_keys.add(key)
 
-# Helper: Build key→row map from a file
-def build_key_row_map(file_path):
-    key_to_row = {}
-    with open(file_path, 'r') as f:
-        header = f.readline()
-        for line in f:
-            fields = line.strip().split('\t')
-            if len(fields) >= 8:
-                key = f"{fields[0]}:{fields[1]}:{fields[2]}"
-                key_to_row[key] = fields
-    return header, key_to_row
+    with open(output_path, 'w') as out:
+        for key in sorted(combined_keys, key=lambda k: (k.split(':')[0], int(k.split(':')[1]), k.split(':')[2])):
+            out.write(key + '\n')
 
-# Step 3: Generate shared methylation output
-def write_shared_table(shared_keys, methylated_dir, shared_dir, input_dir, threshold, revert=False):
+    return combined_keys
+
+# Step 3b: Filter -f files to include only combined keys
+def filter_filtered_files_by_keys(filtered_dir, shared_dir, combined_keys):
     os.makedirs(shared_dir, exist_ok=True)
 
-    # If revert is active, build original row maps
-    original_data = {}
-    if revert:
-        for filename in os.listdir(input_dir):
-            if filename.startswith('.'):
-                continue
-            input_path = os.path.join(input_dir, filename)
-            _, key_to_row = build_key_row_map(input_path)
-            original_data[filename] = key_to_row
-
-    for filename in os.listdir(methylated_dir):
+    for filename in os.listdir(filtered_dir):
         if filename.startswith('.'):
             continue
 
-        methylated_path = os.path.join(methylated_dir, filename)
-        shared_path = os.path.join(shared_dir, filename)
+        input_path = os.path.join(filtered_dir, filename)
+        output_path = os.path.join(shared_dir, filename)
 
-        header, methylated_rows = build_key_row_map(methylated_path)
-        original_rows = original_data.get(filename, {}) if revert else {}
+        with open(input_path, 'r') as infile, open(output_path, 'w') as outfile:
+            header = infile.readline()
+            outfile.write(header)
 
-        with open(shared_path, 'w') as out:
-            out.write(header)
-            for key in sorted(shared_keys, key=lambda k: (k.split(':')[0], int(k.split(':')[1]), k.split(':')[2])):
-                if key in methylated_rows:
-                    row = methylated_rows[key]
-                elif revert and key in original_rows:
-                    original = original_rows[key]
-                    try:
-                        original_total = int(original[5])
-                    except ValueError:
-                        original_total = 0
-
-                    if original_total >= threshold:
-                        row = original
-                    else:
-                        row = [original[0], original[1], original[2], '0', '0', '0', '1.0', '1.0']
-                else:
-                    chrom, pos, strand = key.split(':')
-                    row = [chrom, pos, strand, '0', '0', '0', '1.0', '1.0']
-                out.write('\t'.join(row) + '\n')
+            for line in infile:
+                fields = line.strip().split('\t')
+                if len(fields) >= 3:
+                    key = f"{fields[0]}:{fields[1]}:{fields[2]}"
+                    if key in combined_keys:
+                        outfile.write(line)
 
 # Main control
 def main():
@@ -131,13 +107,14 @@ def main():
     parser.add_argument("-m", "--methylated", required=True, help="Methylated significant output folder")
     parser.add_argument("-s", "--shared", required=True, help="Shared methylation output folder")
     parser.add_argument("-threshold", type=int, required=True, help="Coverage threshold")
-    parser.add_argument("-revert", action="store_true", help="Restore original values for non-significant sites in shared output, if above threshold")
 
     args = parser.parse_args()
 
     os.makedirs(args.filtered, exist_ok=True)
+    os.makedirs(args.methylated, exist_ok=True)
+    os.makedirs(args.shared, exist_ok=True)
 
-    print("[1/3] Filtering by total coverage...")
+    print("[1/3] Filtering by total coverage and FDR...")
     for filename in os.listdir(args.input):
         if filename.startswith('.'):
             continue
@@ -148,9 +125,10 @@ def main():
     print("[2/3] Keeping rows with FDR < 0.05...")
     methylation_significant_only(args.filtered, args.methylated)
 
-    print("[3/3] Building shared significant site table...")
-    shared_keys = build_significant_shared_set(args.methylated)
-    write_shared_table(shared_keys, args.methylated, args.shared, args.input, args.threshold, revert=args.revert)
+    print("[3/3] Building combined methylated site list and filtering filtered files...")
+    combined_key_file = os.path.join(args.shared, "combined_methylated_sites.txt")
+    combined_keys = generate_combined_key_file(args.methylated, combined_key_file)
+    filter_filtered_files_by_keys(args.filtered, args.shared, combined_keys)
 
     print("✅ Done!")
 

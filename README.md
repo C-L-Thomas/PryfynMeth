@@ -11,13 +11,16 @@ For Whole Genome Bisulphite Sequencing files, these scripts function with a part
 If you wish to examine destranded data, the input file is different, and there will be an exra processing step to get the file in a similar format to stranded data. Destranded file types are *.cov output files from Bismark's coverage2cytosine command with the --merge_CpGs option used. This will generate files in [this](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_destranded.cov) format. Once you have generated cov files, run the following command:
 
 ```
-python3 PryfynMeth_Cov_Convert.py -i cov_file_folder -o PryfynMeth_Formated_Files -ref reference_genome.fa
+python PryfynMeth_Bisulphite_Preprocessing.py -i Input -o all_Input -type stranded --output_type all #template_cov_file.cov
+
 ```
-`-i` - Input folder cov files in [this](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_destranded.cov) format.
+`-i` - Input folder cov files in [this](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_destranded.cov) format or report files in [this](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_stranded.report.txt) format.
 
 `-o` - Output folder for reformatted files. This will be your input folder for `PryfynMeth_Binomial.py`
 
-`-ref` - Genomic fasta file of your organism.
+`-type` - Stranded or Destranded
+
+`-output_type` all, coverage or shared. Explained [here](). Note, if using destranded data, you will need an input "template" cov file in the position indicated by the hash. How to generate this will be explained [here]().
 
 ## Preprocessing: Nanopore Sequencing
 
@@ -50,6 +53,16 @@ python3 PryfynMeth_Nanopore_Prepare.py -i Input/ -ref cpgs.bed -reduce
 `-ref` - File generated from modkit motif command outlined above
 
 `-reduce` - Keeps same number of rows between all samples, but removes sites that never have coverage
+
+A final step for the Nanopore preprocessing is to adjust the CG positions. For an unknown reason (I have contacted ONT), modkit files come out 1 position out of sync for + strand bases, and the start and end position is the wrong way around for - strand bases. The PryfynMeth_Nanopore_Adjust.py command fixes this before the binomial test:
+
+```
+python PryfynMeth_Nanopore_Adjust.py -i Input/
+````
+
+`-i` - Input folder (output from Nanopore_Prepare)
+
+This should generate a folder named adjusted_output.
 
 # Binomial Test 
 To determine whether an individual site is methylated in whole genome methylation sequencing, it's common practice to assess if the observed methylation level is significantly higher than what would be expected by chance. This is typically done by comparing the observed methylation proportion to a statistical threshold, often using a binomial test. In whole genome bisulphite sequencing and Nanopore sequencing, this threshold is determined by the percentage methylation found in lambda spiked DNA. To identify methylated sites, you can use the `PryfynMeth_Binomial.py` command. 
@@ -92,6 +105,8 @@ python PryfynMeth_Filter.py  -i Binomial_Results_Folder -f output_adjusted_sites
 | 1/20 (fail FDR)  | 0/0  | 1/20 |
 | 2/20 (pass FDR)  | 2/20  | 2/20 |
 
+I find it easiest to run all options (filtered, methylated, subset and revert), which allows you to inspect how many sites proceed for each option, before making a decision for the next step.
+
 # Statistics
 To obtain the percentage of methylated sites, level of methylation and the coverage, you can use PryfynMeth_Statistics.py. The input folder (-i) can be your binomial test results, your filtered results, methylated sites results or shared CpG results (although the latter 2 won't give you measures as to how much of the unmethylated genome you're missing).
 
@@ -119,4 +134,10 @@ PryfynMeth_Condition_CpG_Mean.py takes an input [metadata](https://github.com/C-
 
 ```
 python3 PryfynMeth_Condition_CpG_Mean.py -i input_folder -meta condition_metadata.txt -o filename.tsv -g gene_info.txt
+```
+
+PryfynMeth_Sample_Combine.py can take your preprocessed data with an input [metadata](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Condition_Summaries/Condition_Metadata.txt) to let you determine methylated sites across all samples. This should be proceeded with a binmoial test and filtering. 
+
+```
+PryfynMeth_Sample_Combine.py -i Preprocessed_Data/ -m combine_metadata.txt -o Output_Folder/
 ```

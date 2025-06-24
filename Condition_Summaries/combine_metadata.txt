@@ -1,0 +1,11 @@
+fileName        condition
+Female_2_CpG_meth.bed   female.txt
+Female_3_CpG_meth.bed   female.txt
+Female_4_CpG_meth.bed   female.txt
+Female_5_CpG_meth.bed   female.txt
+Female_6_CpG_meth.bed   female.txt
+Male_2_CpG_meth.bed     male.txt
+Male_3_CpG_meth.bed     male.txt
+Male_4_CpG_meth.bed     male.txt
+Male_5_CpG_meth.bed     male.txt
+Male_6_CpG_meth.bed     male.txt

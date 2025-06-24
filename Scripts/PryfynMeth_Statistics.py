@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import argparse
 
@@ -15,6 +17,9 @@ def process_file(file_path):
     covered_rows = 0
     cov10 = cov20 = cov30 = cov50 = cov100 = 0
 
+    total_sum = 0
+    valid_total_rows = 0
+
     with open(file_path, 'r') as infile:
         header = infile.readline()
         for line in infile:
@@ -29,6 +34,8 @@ def process_file(file_path):
                 continue
 
             total_rows += 1
+            total_sum += total
+            valid_total_rows += 1
 
             if total > 0:
                 covered_rows += 1
@@ -62,6 +69,7 @@ def process_file(file_path):
         "cov30": percent(cov30),
         "cov50": percent(cov50),
         "cov100": percent(cov100),
+        "coverage": (total_sum / valid_total_rows) if valid_total_rows else 0.0
     }
 
 def main():
@@ -77,7 +85,7 @@ def main():
     summary_path = os.path.join(input_dir, "statistics.txt")
     with open(summary_path, 'w') as summary_file:
         for filename in sorted(os.listdir(input_dir)):
-            if filename.endswith("_statistics.txt"):
+            if filename.endswith("_statistics.txt") or filename == "statistics.txt":
                 continue
 
             file_path = os.path.join(input_dir, filename)
@@ -95,7 +103,8 @@ def main():
             summary_file.write(f"Proportion with ≥50x coverage: {stats['cov50']:.2f}%\n")
             summary_file.write(f"Proportion with ≥100x coverage: {stats['cov100']:.2f}%\n")
             summary_file.write(f"Average Methylation of all sites: {stats['avg_all']:.2f}%\n")
-            summary_file.write(f"Average Methylation of methylated sites (FDR < 0.05): {stats['avg_meth']:.2f}%\n\n")
+            summary_file.write(f"Average Methylation of methylated sites (FDR < 0.05): {stats['avg_meth']:.2f}%\n")
+            summary_file.write(f"Average Coverage: {stats['coverage']:.2f}%\n\n")
 
 if __name__ == "__main__":
     main()

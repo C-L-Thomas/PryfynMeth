@@ -136,7 +136,7 @@ PryfynMeth_Condition_CpG_Mean.py takes an input [metadata](https://github.com/C-
 python3 PryfynMeth_Condition_CpG_Mean.py -i input_folder -meta condition_metadata.txt -o filename.tsv -g gene_info.txt
 ```
 
-PryfynMeth_Sample_Combine.py can take your preprocessed data with an input [metadata](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Condition_Summaries/Condition_Metadata.txt) to let you determine methylated sites across all samples. This should be proceeded with a binmoial test and filtering. 
+PryfynMeth_Sample_Combine.py can take your preprocessed data with an input [metadata](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Condition_Summaries/combine_metadata.txt) to let you determine methylated sites across all samples. This should be proceeded with a binmoial test and filtering. 
 
 ```
 PryfynMeth_Sample_Combine.py -i Preprocessed_Data/ -m combine_metadata.txt -o Output_Folder/

@@ -17,5 +17,5 @@ dependencies = [
     "numpy"
 ]
 
-[tool.setuptools]
-packages = ["PryfynMeth"]
+[tool.setuptools.packages.find]
+where = ["."]

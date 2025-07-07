@@ -1,0 +1,2 @@
+sampleName	inputFile	lambda
+s1	s1.txt	0.5

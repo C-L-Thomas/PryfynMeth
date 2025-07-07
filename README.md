@@ -15,6 +15,16 @@ Install:
 pip install .
 ```
 
+Test the installation works with the following command:
+
+```
+python PryfynMeth/pryfynmeth/binomial.py \
+  -meta PryfynMeth/test_data/binomial/metadata.txt \
+  -platform illu \
+  -i PryfynMeth/test_data/binomial/input_dir \
+  -o test
+```
+
 # Preprocessing
 PryfynMeth can accept three input file types; Nanopore [MethylBed](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Nanopore_WorkFlow/example_methyl.bed), [Bismark bismark_methylation_extractor reports (bisulphite stranded)](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_stranded.report.txt), and [Bismark coverage2cytosine cov files (bisulphite destranded)](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_destranded.cov). 
 

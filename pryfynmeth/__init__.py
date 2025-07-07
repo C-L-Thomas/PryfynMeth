@@ -1,5 +1,13 @@
 __version__ = "0.1.0"
 
-# Optionally import key modules to expose them at package level
-from . import meth_parser
-from . import methylome_stats
+from . import (
+    binomial,
+    bisulphite_preprocessing,
+    condition_cpg_mean,
+    cov_convert,
+    dss_prepare,
+    filter,
+    nanopore_adjust,
+    sample_combine,
+    statistics
+)

@@ -54,22 +54,22 @@ For Nanopore sequencing, these scripts function with the outputs of `modkit`. An
 modkit motif bed reference.fasta CG 0 1> cg_motifs.bed
 ```
 
-As a default, Modkit outputs will give you methylation and hydroxymethylation for sites with coverage. This leads to the problem that you are essentially doubling the number of input rows, which will have an impact on the binomial FDR. The `nanopore_prepare.py` command separates these into separate files, thus reducing the input files for FDR. There are three ways you can then decide to deal with this. The first is to proceed with with only the sites with coverage. This requires you only split methylation from hydroxymethylation. To run this:
+As a default, Modkit outputs will give you methylation and hydroxymethylation for sites with coverage. This leads to the problem that you are essentially doubling the number of input rows, which will have an impact on the binomial FDR. The `nanopore_preprocessing.py` command separates these into separate files, thus reducing the input files for FDR. There are three ways you can then decide to deal with this. The first is to proceed with with only the sites with coverage. This requires you only split methylation from hydroxymethylation. To run this:
 
 ```
-python3 pryfynmeth/nanopore_prepare.py -i Input/
+python3 pryfynmeth/nanopore_preprocessing.py -i Input/
 ````
 
 You may decide that this biases samples with a lower number of sites in the FDR. To resolve this, you may take one of two approaches. The first is to make sure that the files that will go through the binomial possess every CpG in the genome:
 
 ```
-python3 pryfynmeth/nanopore_prepare.py -i Input/ -ref cpgs.bed 
+python3 pryfynmeth/nanopore_preprocessing.py -i Input/ -ref cpgs.bed 
 ````
 
 Whilst this makes sure each sample is treated the same in the FDR, it does increase the number of sites included in the FDR calculation which may result in fewer sites being classified as methylated. To combat this whilst treating each sample equally, you may wish to remove genomic sites that don't posses coverage in any sample using the -reduce option:
 
 ```
-python3 pryfynmeth/nanopore_prepare.py -i Input/ -ref cpgs.bed -reduce
+python3 pryfynmeth/nanopore_preprocessing.py -i Input/ -ref cpgs.bed -reduce
 ````
 
 `-i` - Input folder of modkit output bed files, which are in [this](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Nanopore_WorkFlow/example_methyl.bed) format

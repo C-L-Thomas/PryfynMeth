@@ -44,7 +44,7 @@ python pryfynmeth/bisulphite_preprocessing.py -i Input -o all_Input -type strand
 
 `-type` - Stranded or Destranded
 
-`-output_type` all, coverage or shared. Explained [here](). Note, if using destranded data, you will need an input "template" cov file in the position indicated by the hash. How to generate this will be explained [here]().
+`-output_type` all, coverage or shared. Explained [here](). Note, if using destranded data, you will need an input "template" cov file in the position indicated by the hash. How to generate this will be explained [here](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/Creating_All_CpG_Cov_File/Script.sh).
 
 ## Preprocessing: Nanopore Sequencing
 

@@ -40,7 +40,15 @@ def read_input_nano(file_path):
     with open(file_path, 'r') as f:
         for line in f:
             fields = line.strip().split('\t')
-            chr, pos, strand, C, T, total = fields[0], fields[1], fields[5], int(fields[11]), int(fields[12]), int(fields[9])
+            # Use 0-based indexing: chr (0), pos (1), strand (2), total (4), C (12), T (13)
+            if len(fields) < 14:
+                continue  # Skip malformed lines
+            chr = fields[0]
+            pos = fields[1]
+            strand = fields[2]
+            total = int(fields[4])
+            C = int(fields[12])
+            T = int(fields[13])
             data.append((chr, pos, strand, C, T, total))
     return data
 
@@ -71,11 +79,12 @@ if not metadata_file or not platform or not input_dir or not output_dir:
     print("Error: Missing required arguments.")
     print("Usage: python3 PryfMeth_Binomial.py -meta <metadata_file> -platform <platform> -i <input_dir> -o <output_dir>")
     sys.exit(1)
+
 if platform not in ['illu', 'nano']:
     print("Error: Unsupported platform specified. Use 'illu' or 'nano'.")
     sys.exit(1)
 
-# Check if the metadata file exists
+# Check if metadata file exists
 if not os.path.isfile(metadata_file):
     print(f"Error: Metadata file '{metadata_file}' does not exist.")
     sys.exit(1)
@@ -84,27 +93,26 @@ if not os.path.isfile(metadata_file):
 if not os.path.isdir(input_dir):
     print(f"Error: Input directory '{input_dir}' does not exist.")
     sys.exit(1)
+
 if not os.path.isdir(output_dir):
     os.makedirs(output_dir)
 
 # Read the metadata table
 metadata = read_metadata(metadata_file)
 
-# Process each entry in the metadata table
+# Process each entry in the metadata
 for row in metadata:
     sample_name = row['sampleName']
     input_file = os.path.join(input_dir, row['inputFile'])
     lambda_value = float(row['lambda'])
 
-    # Verify if the input file exists
     if not os.path.isfile(input_file):
         print(f"Input file '{input_file}' for sample '{sample_name}' not found. Skipping.")
         continue
 
-    # Define the output file name
     output_file = os.path.join(output_dir, f"{sample_name}_binomial_results.txt")
 
-    # Read the input file based on platform
+    # Read input data
     try:
         if platform == 'illu':
             input_data = read_input_illu(input_file)
@@ -114,7 +122,7 @@ for row in metadata:
         print(f"Error reading input file '{input_file}': {e}")
         continue
 
-    # Process each row to compute p-values
+    # Compute p-values
     results = []
     p_values = []
 
@@ -127,7 +135,6 @@ for row in metadata:
         elif platform == 'nano':
             chr, pos, strand, C, T, total = fields
 
-        # Perform binomial test or assign p-value as 1 if total is 0
         if total < 1:
             p_value = 1.0
         else:
@@ -136,13 +143,10 @@ for row in metadata:
         p_values.append(p_value)
         results.append((chr, pos, strand, C, T, total, p_value))
 
-    # Apply FDR correction
+    # FDR correction
     corrected_pvals = fdr_correction(p_values)
 
-    # Write results with FDR-corrected p-values to the output file
+    # Write output
     with open(output_file, 'w') as out_f:
         out_f.write("chr\tpos\tstrand\tC\tT\ttotal\tp-value\tfdr\n")
-        for result, fdr_pval in zip(results, corrected_pvals):
-            out_f.write("\t".join(map(str, result)) + f"\t{fdr_pval}\n")
 
-print("Processing complete. Results are saved in the specified output directory.")

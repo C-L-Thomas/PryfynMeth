@@ -110,7 +110,7 @@ def process_files(input_folder, ref_file=None, reduce=False):
             print(f"- Created: {output_m_path}")
 
     if reduce:
-	print("\n-- Generating global modifier lists and enforcing full matrices --")
+        print("\n-- Generating global modifier lists and enforcing full matrices --")
 
         for suffix, folder in [("hydroxymeth", hydroxymethylation_folder), ("meth", methylation_folder)]:
             all_modifiers = set()
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process methylation bed files with optional reference and matrix reduction.")
     parser.add_argument("-i", "--input", required=True, help="Path to the input folder containing *_meth.bed files.")
     parser.add_argument("-ref", "--reference", required=False, help="(Optional) Path to the reference CpG file.")
-    parser.add_argument("-reduce", action="store_true", help="(Optional) Ensure all output files contain identical rows by filling missing sit>
+    parser.add_argument("-reduce", action="store_true", help="(Optional) Ensure all output files contain identical rows by filling missing sites.")
 
     args = parser.parse_args()
     process_files(args.input, args.reference, args.reduce)

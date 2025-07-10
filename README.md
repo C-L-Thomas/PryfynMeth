@@ -1,6 +1,9 @@
 # Background
 Welcome to the package PryfynMeth. This aims to be a toolkit to aid with the analysis of insect methylation data. We have included separate subfolders for workthroughs with Whole Genome Bisulphite Sequencing data and Nanopore sequencing data, and example scripts for the whole pipeline for [Nanopore](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Nanopore_WorkFlow/Example_Workflow.sh).
 
+# Documentation: See the [Full Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/Wiki) for setup instructions, usage, and deeper explanations.
+
+
 # Installation
 Download the repository:
 

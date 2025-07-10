@@ -26,16 +26,15 @@ def process_stranded_file(input_path, output_path, output_type):
             except ValueError:
                 c_count = float(parts[3])
                 t_count = float(parts[4])
-            coverage = c_count + t_count
-            col4, col5 = str(c_count), str(coverage)
+            col4, col5 = str(c_count), str(t_count)  # Keep original C and T counts
             col6, col7 = parts[5], parts[6]
             if output_type == 'all':
                 outfile.write(f"{col1}\t{col2}\t{strand}\t{col4}\t{col5}\t{col6}\t{col7}\n")
             elif output_type == 'coverage':
-                if coverage != 0:
+                if c_count != 0 or t_count != 0:
                     outfile.write(f"{col1}\t{col2}\t{strand}\t{col4}\t{col5}\t{col6}\t{col7}\n")
             elif output_type == 'shared':
-                if coverage != 0:
+                if c_count != 0 or t_count != 0:
                     outfile.write(f"{col1}\t{col2}\t{strand}\t{col4}\t{col5}\t{col6}\t{col7}\n")
                     modifiers_written.append(f"{col1}|||{col2}|||{strand}")
     return modifiers_written
@@ -57,13 +56,12 @@ def process_destranded_file(input_path, output_path, output_type, cov_sites=None
             except ValueError:
                 cov1 = float(parts[4])
                 cov2 = float(parts[5])
-            total_cov = cov1 + cov2
-            row = f"{col1}\t{col2}\t*\t{cov1}\t{total_cov}\t-\t-"
+            row = f"{col1}\t{col2}\t*\t{cov1}\t{cov2}\t-\t-"  # Write C and T directly, not total
             if output_type == 'all':
                 input_rows[key] = row
-            elif output_type == 'coverage' and total_cov != 0:
+            elif output_type == 'coverage' and (cov1 != 0 or cov2 != 0):
                 input_rows[key] = row
-            elif output_type == 'shared' and total_cov != 0:
+            elif output_type == 'shared' and (cov1 != 0 or cov2 != 0):
                 input_rows[key] = row
                 modifiers_written.append(key)
 
@@ -159,3 +157,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

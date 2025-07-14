@@ -16,6 +16,7 @@ git clone https://github.com/C-L-Thomas/PryfynMeth.git
 Install:
 
 ```
+cd PryfynMeth
 pip install .
 ```
 

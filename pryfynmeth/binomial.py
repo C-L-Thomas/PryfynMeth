@@ -34,22 +34,27 @@ def read_input_illu(file_path):
             data.append(fields)
     return data
 
-# Function to read input file for the 'nano' platform
+# ✅ Corrected function to read 'nano' platform input
 def read_input_nano(file_path):
     data = []
     with open(file_path, 'r') as f:
-        for line in f:
+        for i, line in enumerate(f, 1):
             fields = line.strip().split('\t')
-            # Use 0-based indexing: chr (0), pos (1), strand (2), total (4), C (12), T (13)
-            if len(fields) < 14:
-                continue  # Skip malformed lines
-            chr = fields[0]
-            pos = fields[1]
-            strand = fields[2]
-            total = int(fields[4])
-            C = int(fields[12])
-            T = int(fields[13])
-            data.append((chr, pos, strand, C, T, total))
+            if len(fields) < 13:
+                print(f"[WARN] Skipping line {i} in '{file_path}': only {len(fields)} fields (expected ≥13)")
+                continue
+            try:
+                chr = fields[0]
+                pos = fields[1]
+                strand = fields[2]
+                total = int(fields[4])     # Column 5 (0-based index 4)
+                C = int(fields[11])        # Column 12 (0-based index 11)
+                T = int(fields[12])        # Column 13 (0-based index 12)
+                data.append((chr, pos, strand, C, T, total))
+            except Exception as e:
+                print(f"[ERROR] Failed to parse line {i} in '{file_path}': {e}")
+                continue
+    print(f"[INFO] Read {len(data)} valid rows from '{file_path}'")
     return data
 
 # Main script
@@ -84,12 +89,10 @@ if platform not in ['illu', 'nano']:
     print("Error: Unsupported platform specified. Use 'illu' or 'nano'.")
     sys.exit(1)
 
-# Check if metadata file exists
 if not os.path.isfile(metadata_file):
     print(f"Error: Metadata file '{metadata_file}' does not exist.")
     sys.exit(1)
 
-# Ensure input and output directories exist
 if not os.path.isdir(input_dir):
     print(f"Error: Input directory '{input_dir}' does not exist.")
     sys.exit(1)
@@ -97,32 +100,30 @@ if not os.path.isdir(input_dir):
 if not os.path.isdir(output_dir):
     os.makedirs(output_dir)
 
-# Read the metadata table
+# Read the metadata
 metadata = read_metadata(metadata_file)
 
-# Process each entry in the metadata
+# Process each sample
 for row in metadata:
     sample_name = row['sampleName']
     input_file = os.path.join(input_dir, row['inputFile'])
     lambda_value = float(row['lambda'])
 
     if not os.path.isfile(input_file):
-        print(f"Input file '{input_file}' for sample '{sample_name}' not found. Skipping.")
+        print(f"[WARN] Input file '{input_file}' for sample '{sample_name}' not found. Skipping.")
         continue
 
     output_file = os.path.join(output_dir, f"{sample_name}_binomial_results.txt")
 
-    # Read input data
     try:
         if platform == 'illu':
             input_data = read_input_illu(input_file)
         elif platform == 'nano':
             input_data = read_input_nano(input_file)
     except Exception as e:
-        print(f"Error reading input file '{input_file}': {e}")
+        print(f"[ERROR] Failed to read input file '{input_file}': {e}")
         continue
 
-    # Compute p-values
     results = []
     p_values = []
 
@@ -143,10 +144,17 @@ for row in metadata:
         p_values.append(p_value)
         results.append((chr, pos, strand, C, T, total, p_value))
 
-    # FDR correction
+    if not results:
+        print(f"[WARN] No valid data rows processed for sample '{sample_name}'. Output will be empty.")
+        continue
+
     corrected_pvals = fdr_correction(p_values)
 
-    # Write output
     with open(output_file, 'w') as out_f:
         out_f.write("chr\tpos\tstrand\tC\tT\ttotal\tp-value\tfdr\n")
+        for result, fdr_pval in zip(results, corrected_pvals):
+            out_f.write("\t".join(map(str, result)) + f"\t{fdr_pval}\n")
 
+    print(f"[INFO] Processed {len(results)} rows for sample '{sample_name}'. Output saved to '{output_file}'.")
+
+print("✅ Processing complete.")

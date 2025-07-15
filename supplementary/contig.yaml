@@ -1,3 +1,13 @@
-input_dir: Input/
-reference_bed: cpgs.bed
+reference_bed: /data/monoallelic/christian/Genomes/Nvit_psr_1.1/Nvit_psr_1.1/cpgs.bed
 metadata: metadata.txt
+samples:
+  - Female_2_meth
+  - Female_3_meth
+  - Female_4_meth
+  - Female_5_meth
+  - Female_6_meth
+  - Male_2_meth
+  - Male_3_meth
+  - Male_4_meth
+  - Male_5_meth
+  - Male_6_meth

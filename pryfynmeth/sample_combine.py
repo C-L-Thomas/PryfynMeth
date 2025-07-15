@@ -15,11 +15,9 @@ def read_nano_file(filepath, min_cols):
     for i in range(df.shape[1], min_cols):
         df[i] = 0
 
-    # Ensure correct columns are numeric
     for col in [4, 11, 12]:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-    # Ensure strand is + or -
     df[3] = df[3].astype(str).str.strip()
     df[3] = df[3].where(df[3].isin(['+', '-']), '-')
 
@@ -29,7 +27,7 @@ def read_illu_file(filepath):
     df = pd.read_csv(filepath, sep="\t", header=None, low_memory=False)
     for col in [3, 4]:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-    return df[[0, 1, 2, 3, 4]]  # chr, pos, strand, meth, unmeth
+    return df[[0, 1, 2, 3, 4, 5, 6]]  # chr, pos, strand, meth, unmeth, context, sequence
 
 def merge_nano(file_paths):
     min_cols = 14
@@ -44,23 +42,19 @@ def merge_nano(file_paths):
             merged[col] = merged[col].fillna(0) + merged[f"{col}_new"].fillna(0)
             merged.drop(columns=[f"{col}_new"], inplace=True)
 
-    # Recalculate percent methylation using meth / coverage
     merged['percent'] = (
         merged['meth'] / merged['coverage']
     ).replace([float('inf'), -float('inf')], 0).fillna(0) * 100
     merged['percent'] = merged['percent'].round(2)
 
-    # Rebuild full structure
     merged['meth_status'] = '-'
     merged['start2'] = merged['start']
     merged['end2'] = merged['end']
     for col in ['col9', 'col10', 'col15', 'col16', 'col17', 'col18', 'col19']:
         merged[col] = 0
 
-    # Ensure coverage is integer
     merged['coverage'] = merged['coverage'].round().astype(int)
 
-    # Final column order
     final_cols = [
         'chr', 'start', 'end', 'meth_status', 'coverage', 'strand',
         'start2', 'end2', 'col9', 'col10', 'percent', 'meth', 'unmeth',
@@ -73,20 +67,21 @@ def merge_nano(file_paths):
 
 def merge_illu(file_paths):
     merged = read_illu_file(file_paths[0])
-    merged.columns = ['chr', 'pos', 'strand', 'meth', 'unmeth']
+    merged.columns = ['chr', 'pos', 'strand', 'meth', 'unmeth', 'context', 'sequence']
 
     for path in file_paths[1:]:
         df = read_illu_file(path)
-        df.columns = ['chr', 'pos', 'strand', 'meth_new', 'unmeth_new']
+        df.columns = ['chr', 'pos', 'strand', 'meth_new', 'unmeth_new', 'context_new', 'sequence_new']
         merged = pd.merge(merged, df, on=['chr', 'pos', 'strand'], how='outer')
+
         for col in ['meth', 'unmeth']:
             merged[col] = merged[col].fillna(0) + merged[f"{col}_new"].fillna(0)
             merged.drop(columns=[f"{col}_new"], inplace=True)
 
-    merged['percent'] = (
-        merged['meth'] / (merged['meth'] + merged['unmeth'])
-    ).replace([float('inf'), -float('inf')], 0).fillna(0) * 100
-    merged['percent'] = merged['percent'].round(2)
+        # Drop new context/sequence — keep original
+        merged.drop(columns=['context_new', 'sequence_new'], inplace=True)
+
+    merged = merged[['chr', 'pos', 'strand', 'meth', 'unmeth', 'context', 'sequence']]
     merged.sort_values(by=['chr', 'pos'], inplace=True)
     return merged
 

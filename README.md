@@ -157,16 +157,3 @@ python pryfynmeth/dss_prepare.py -i output_shared_sites -o DSS_folder
 
 `-o` An output folder for files in the DSS input format
 
-# Additional Tools
-
-condition_cpg_mean.py takes an input [metadata](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Condition_Summaries/Condition_Metadata.txt) file with your sample conditions, and gives a mean (and SE) for each sites methylation. The output is a file with each CpG with each conditions mean and SE. It is advised the -f folder from filter.py is used as the input.
-
-```
-python3 pryfynmeth/condition_cpg_mean.py -i input_folder -meta condition_metadata.txt -o filename.tsv -g gene_info.txt
-```
-
-sample_Ccmbine.py can take your preprocessed data with an input [metadata](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Condition_Summaries/combine_metadata.txt) to let you determine methylated sites across all samples. This should be proceeded with a binmoial test and filtering. 
-
-```
-python pryfynmeth/sample_combine.py -i Preprocessed_Data/ -m combine_metadata.txt -o Output_Folder/
-```

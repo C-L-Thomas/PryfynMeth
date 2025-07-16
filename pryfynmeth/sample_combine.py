@@ -18,10 +18,12 @@ def read_nano_file(filepath, min_cols):
     for col in [4, 11, 12]:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-    df[3] = df[3].astype(str).str.strip()
-    df[3] = df[3].where(df[3].isin(['+', '-']), '-')
+    # FIX: Correct strand column is index 5 (column 6 in input)
+    df[5] = df[5].astype(str).str.strip()
+    df[5] = df[5].where(df[5].isin(['+', '-']), '-')
 
-    return df[[0, 1, 2, 3, 4, 11, 12]]
+    # Return with corrected strand column
+    return df[[0, 1, 2, 5, 4, 11, 12]]  # chr, start, end, strand, coverage, meth, unmeth
 
 def read_illu_file(filepath):
     df = pd.read_csv(filepath, sep="\t", header=None, low_memory=False)
@@ -38,6 +40,7 @@ def merge_nano(file_paths):
         df = read_nano_file(path, min_cols)
         df.columns = ['chr', 'start', 'end', 'strand', 'coverage_new', 'meth_new', 'unmeth_new']
         merged = pd.merge(merged, df, on=['chr', 'start', 'end', 'strand'], how='outer')
+
         for col in ['coverage', 'meth', 'unmeth']:
             merged[col] = merged[col].fillna(0) + merged[f"{col}_new"].fillna(0)
             merged.drop(columns=[f"{col}_new"], inplace=True)

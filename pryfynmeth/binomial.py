@@ -46,7 +46,7 @@ def read_input_nano(file_path):
             try:
                 chr = fields[0]
                 pos = fields[1]
-                strand = fields[2]
+                strand = fields[5]  # ✅ Corrected: use column 6 for strand
                 total = int(fields[4])     # Column 5 (0-based index 4)
                 C = int(fields[11])        # Column 12 (0-based index 11)
                 T = int(fields[12])        # Column 13 (0-based index 12)

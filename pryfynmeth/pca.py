@@ -2,52 +2,45 @@
 """
 PCA from per-sample site tables using only NumPy/Pandas (no scikit-learn)
 
-Input files (one per sample), columns (case-insensitive):
-chr, pos, strand, C, T, total, p-value, fdr
-We use chr/pos/strand/C/total.
-
-Pipeline:
-1) Build unique site key "modifier" = chr:pos:strand
-2) Value = (C / total) * 100 by default (use --as-fraction for 0–1)
-3) Assemble samples × sites matrix (rows = samples, cols = sites)
-4) Optional filtering (min_total, min_samples)
-5) Handle missing (drop or impute mean/median/most_frequent)
-6) Optional scaling (z-score per site)
-7) PCA via SVD (NumPy)
-8) (NEW) Optional metadata: color points by condition in plots and export joined scores
-
-Example metadata (TSV):
-sample	condition
-Nanopore_Female_1.txt	1
-Nanopore_Female_2.txt	1
-...
-WGBS_Male_3.txt	4
+- Reads all *.txt (tab-delimited) in --input-dir
+- Builds site key "chr:pos:strand"
+- Value = (C / total) * 100 unless --as-fraction
+- Optional metadata: 2 columns [sample, condition]
+- Plots (if matplotlib available) with:
+  * PC axis labels showing % variance explained
+  * ALWAYS annotated sample labels
+  * Label de-overlap (2D) via a small built-in repel algorithm
+  * Font-size controls for labels and axes
 """
 
 import argparse
 import glob
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import numpy as np
 import pandas as pd
 
-# Optional plotting: import matplotlib only if available
+DEFAULT_PATTERN = "*.txt"
+
+# Optional plotting: force a headless backend if matplotlib is installed
 HAVE_MPL = True
 def _lazy_import_matplotlib():
     global HAVE_MPL
     try:
-        import matplotlib.pyplot as plt  # noqa: F401
-    except Exception:
+        import matplotlib
+        matplotlib.use("Agg")             # headless backend for clusters
+        import matplotlib.pyplot as plt    # noqa: F401
+    except Exception as e:
         HAVE_MPL = False
+        print(f"[warn] matplotlib not available; skipping plots ({e})")
 
 
 def parse_args():
     p = argparse.ArgumentParser(description="Run PCA on C/total percentages across samples (no scikit-learn).")
     # data
-    p.add_argument("--input-dir", "-i", required=True, help="Directory with per-sample files.")
-    p.add_argument("--glob", default="*.tsv", help='Glob for files in input-dir (e.g., "*.tsv").')
+    p.add_argument("--input-dir", "-i", required=True, help="Directory with per-sample .txt files (tab-delimited).")
     p.add_argument("--delimiter", default="\t", help="Input delimiter for sample files (default: tab).")
     p.add_argument("--as-fraction", action="store_true", help="Use raw fraction (0–1) instead of percentage (0–100).")
     p.add_argument("--min-total", type=int, default=0, help="Drop rows with total <= this (default: 0).")
@@ -62,12 +55,13 @@ def parse_args():
     p.add_argument("--n-components", type=int, default=2, help="Number of PCs to compute (default: 2).")
     # plotting
     p.add_argument("--plot", choices=["2d", "3d", "none"], default="2d", help="Plot PCA scores.")
-    p.add_argument("--annotate-samples", action="store_true", help="Overlay sample names on plots.")
-    # metadata
+    p.add_argument("--label-fontsize", type=int, default=9, help="Font size for sample labels (default: 9).")
+    p.add_argument("--axis-fontsize", type=int, default=12, help="Font size for axis titles & ticks (default: 12).")
+    p.add_argument("--label-repel-iter", type=int, default=200,
+                   help="Max iterations for label de-overlap in 2D (default: 200).")
+    # metadata (fixed columns: sample, condition)
     p.add_argument("--metadata", "-m", help="Path to metadata file (TSV/CSV) with columns: sample, condition.")
     p.add_argument("--metadata-delimiter", default="\t", help="Delimiter for metadata file (default: tab).")
-    p.add_argument("--metadata-sample-col", default="sample", help="Column name in metadata for sample (default: sample).")
-    p.add_argument("--metadata-condition-col", default="condition", help="Column name in metadata for condition (default: condition).")
     # output
     p.add_argument("--output-dir", "-o", default="pca_numpy_output", help="Where to save outputs.")
     return p.parse_args()
@@ -79,7 +73,6 @@ def standardize_headers(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def sample_name_from_path(path: str) -> str:
-    # use filename stem (no extension) as sample id
     return Path(path).stem
 
 
@@ -100,20 +93,17 @@ def read_and_summarize_sample(path: str, sep: str, as_fraction: bool, min_total:
     if df.empty:
         return pd.Series(dtype=float, name=sample_name_from_path(path))
 
-    # Unique site key
     df["modifier"] = df["chr"].astype(str) + ":" + df["pos"].astype(str) + ":" + df["strand"].astype(str)
-
-    # If duplicate sites in a file, sum counts then compute fraction
     grp = df.groupby("modifier", as_index=False)[["c", "total"]].sum()
     frac = grp["c"] / grp["total"]
     values = frac if as_fraction else frac * 100.0
     return pd.Series(values.values, index=grp["modifier"].values, name=sample_name_from_path(path))
 
 
-def build_matrix(input_dir: str, pattern: str, sep: str, as_fraction: bool, min_total: int) -> pd.DataFrame:
-    files = sorted(glob.glob(os.path.join(input_dir, pattern)))
+def build_matrix(input_dir: str, sep: str, as_fraction: bool, min_total: int) -> pd.DataFrame:
+    files = sorted(glob.glob(os.path.join(input_dir, DEFAULT_PATTERN)))
     if not files:
-        raise FileNotFoundError(f"No files matched {os.path.join(input_dir, pattern)}")
+        raise FileNotFoundError(f"No files matched {os.path.join(input_dir, DEFAULT_PATTERN)}")
     series = [read_and_summarize_sample(f, sep, as_fraction, min_total) for f in files]
     mat = pd.concat(series, axis=1).T  # rows=samples, cols=sites
     return mat
@@ -144,9 +134,8 @@ def impute_matrix(X: pd.DataFrame, strategy: str) -> pd.DataFrame:
 
 
 def prepare_for_pca(X: pd.DataFrame, dropna: bool, impute: Optional[str], scale: bool) -> pd.DataFrame:
-    # Handle missing
     if dropna:
-        Xp = X.dropna(axis=0).copy()  # drop samples with any NaN
+        Xp = X.dropna(axis=0).copy()
         if Xp.shape[0] < 2:
             raise ValueError("Fewer than 2 samples remain after dropping rows with NaNs.")
     else:
@@ -160,7 +149,6 @@ def prepare_for_pca(X: pd.DataFrame, dropna: bool, impute: Optional[str], scale:
         else:
             Xp = X.copy()
 
-    # Centering is essential; scaling optional
     if scale:
         means = Xp.mean(axis=0)
         stds = Xp.std(axis=0, ddof=0).replace(0, 1.0)
@@ -172,29 +160,18 @@ def prepare_for_pca(X: pd.DataFrame, dropna: bool, impute: Optional[str], scale:
 
 
 def pca_via_svd(X: pd.DataFrame, n_components: int):
-    """
-    PCA using thin SVD on centered (or z-scored) matrix X (rows=samples, cols=features).
-
-    X = U Σ V^T
-    Scores (per-sample) = U Σ
-    Loadings (per-feature) = V
-    Explained variance ratio = Σ^2 / (n-1) / sum(Σ^2 / (n-1))
-    """
     X_np = X.values.astype(float, copy=False)
     n_samples, n_features = X_np.shape
     kmax = min(n_samples, n_features)
     if kmax < 2:
         raise ValueError("Need at least 2 samples and 2 sites to run PCA.")
 
-    # Thin SVD
     U, S, Vt = np.linalg.svd(X_np, full_matrices=False)
     k = min(n_components, kmax)
 
-    # Scores and loadings
-    scores = U[:, :k] * S[:k]  # (n_samples x k)
-    loadings = Vt[:k, :].T     # (n_features x k)
+    scores = U[:, :k] * S[:k]
+    loadings = Vt[:k, :].T
 
-    # Explained variance (match sklearn): S^2 / (n_samples - 1)
     ev = (S ** 2) / (n_samples - 1)
     ev_ratio = ev / ev.sum()
     explained = ev_ratio[:k]
@@ -212,18 +189,14 @@ def ensure_out_dir(path: str) -> Path:
     return out
 
 
-def load_metadata_series(path: str, sep: str, sample_col: str, condition_col: str) -> pd.Series:
-    """
-    Returns a Series indexed by sample *stem* (filename without extension),
-    with values = condition (any dtype). Extra rows/cols are ignored.
-    """
+def load_metadata_series(path: str, sep: str) -> pd.Series:
     md = pd.read_csv(path, sep=sep, dtype=str)
     md = standardize_headers(md)
-    if sample_col.lower() not in md.columns or condition_col.lower() not in md.columns:
-        raise ValueError(f"Metadata needs columns '{sample_col}' and '{condition_col}' (case-insensitive).")
-    s = md[sample_col.lower()].astype(str).apply(lambda x: Path(x).stem)
-    cond = md[condition_col.lower()]
-    meta = pd.Series(cond.values, index=s, name="condition")
+    if "sample" not in md.columns or "condition" not in md.columns:
+        raise ValueError("Metadata needs columns 'sample' and 'condition' (case-insensitive).")
+    stems = md["sample"].astype(str).apply(lambda x: Path(x).stem)
+    cond = md["condition"]
+    meta = pd.Series(cond.values, index=stems, name="condition")
     return meta
 
 
@@ -258,11 +231,41 @@ def save_tables(out_dir: Path, matrix_samples_x_sites: pd.DataFrame,
         print(f"[saved] {joined_path}")
 
 
+# ---------- Label de-overlap helper (2D) ----------
+def _repel_texts(ax, texts: List["matplotlib.text.Text"], max_iter: int = 200, move_px: float = 0.5):
+    """Simple, dependency-free text repel in display coordinates; adjusts text positions in data coords."""
+    import matplotlib.pyplot as plt  # noqa: F401
+    fig = ax.figure
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    inv = ax.transData.inverted()
+
+    for _ in range(max_iter):
+        moved = False
+        bboxes = [t.get_window_extent(renderer).expanded(1.06, 1.12) for t in texts]  # small padding
+        for i in range(len(texts)):
+            for j in range(i + 1, len(texts)):
+                if bboxes[i].overlaps(bboxes[j]):
+                    # push apart
+                    dx_pix = move_px
+                    dy_pix = move_px
+                    # convert pixel deltas to data-space deltas
+                    dx = inv.transform((dx_pix, 0)) - inv.transform((0, 0))
+                    dy = inv.transform((0, dy_pix)) - inv.transform((0, 0))
+                    xi, yi = texts[i].get_position()
+                    xj, yj = texts[j].get_position()
+                    texts[i].set_position((xi - dx[0], yi + dy[1]))
+                    texts[j].set_position((xj + dx[0], yj - dy[1]))
+                    moved = True
+        if not moved:
+            break
+    fig.canvas.draw()
+
+
+# ---------- Plotting ----------
 def plot_scores_colored(out_dir: Path, scores_df: pd.DataFrame, cond: pd.Series, mode: str,
-                        annotate: bool) -> None:
-    """
-    Color points by discrete condition values. Unlabeled samples (NaN) shown in gray.
-    """
+                        explained: np.ndarray, label_fontsize: int, axis_fontsize: int, repel_iter: int) -> None:
+    """Color points by condition, ALWAYS annotate sample names, add % variance to axis labels."""
     _lazy_import_matplotlib()
     if not HAVE_MPL:
         print("[warn] matplotlib not available; skipping plots")
@@ -273,85 +276,101 @@ def plot_scores_colored(out_dir: Path, scores_df: pd.DataFrame, cond: pd.Series,
     if len(pcs) < 2 or mode == "none":
         return
 
-    # Align and build masks
     cond = cond.reindex(scores_df.index)
     labeled_mask = cond.notna()
     unlabeled_mask = ~labeled_mask
     cats = pd.Categorical(cond[labeled_mask])
     categories = list(cats.categories)
 
+    pct1 = f"{(explained[0] * 100):.1f}%" if len(explained) >= 1 else ""
+    pct2 = f"{(explained[1] * 100):.1f}%" if len(explained) >= 2 else ""
+
     # 2D
     if mode in ("2d", "3d"):
-        plt.figure(figsize=(7.5, 6.5))
-        # plot each category
+        plt.figure(figsize=(8, 6.8))
+        ax = plt.gca()
+        texts = []
         for cat in categories:
             m = labeled_mask & (cond == cat)
-            plt.scatter(scores_df.loc[m, pcs[0]], scores_df.loc[m, pcs[1]], s=32, alpha=0.9, label=str(cat))
-            if annotate:
-                for idx in scores_df.loc[m].index:
-                    x, y = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]]
-                    plt.text(x, y, str(idx), fontsize=8, alpha=0.7)
-        # unlabeled
+            ax.scatter(scores_df.loc[m, pcs[0]], scores_df.loc[m, pcs[1]], s=32, alpha=0.9, label=str(cat))
+            for idx in scores_df.loc[m].index:
+                x, y = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]]
+                texts.append(ax.text(x, y, str(idx), fontsize=label_fontsize, alpha=0.85))
         if unlabeled_mask.any():
-            plt.scatter(scores_df.loc[unlabeled_mask, pcs[0]], scores_df.loc[unlabeled_mask, pcs[1]],
-                        s=32, alpha=0.5, label="(unlabeled)", marker="x")
-            if annotate:
-                for idx in scores_df.loc[unlabeled_mask].index:
-                    x, y = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]]
-                    plt.text(x, y, str(idx), fontsize=8, alpha=0.7)
+            ax.scatter(scores_df.loc[unlabeled_mask, pcs[0]], scores_df.loc[unlabeled_mask, pcs[1]],
+                       s=32, alpha=0.6, label="(unlabeled)", marker="x")
+            for idx in scores_df.loc[unlabeled_mask].index:
+                x, y = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]]
+                texts.append(ax.text(x, y, str(idx), fontsize=label_fontsize, alpha=0.8))
 
-        plt.xlabel(pcs[0]); plt.ylabel(pcs[1]); plt.title(f"PCA Scores by Condition: {pcs[0]} vs {pcs[1]}")
-        plt.grid(True, linestyle="--", alpha=0.35); plt.legend(title="condition", frameon=True)
+        # repel labels (2D)
+        if texts:
+            _repel_texts(ax, texts, max_iter=repel_iter, move_px=0.6)
+
+        ax.set_xlabel(f"{pcs[0]} ({pct1})", fontsize=axis_fontsize)
+        ax.set_ylabel(f"{pcs[1]} ({pct2})", fontsize=axis_fontsize)
+        ax.set_title(f"PCA Scores by Condition: {pcs[0]} vs {pcs[1]}", fontsize=axis_fontsize + 1)
+        ax.grid(True, linestyle="--", alpha=0.35)
+        ax.tick_params(labelsize=max(axis_fontsize - 1, 1))
+        ax.legend(title="condition", frameon=True)
         plt.tight_layout()
         plt.savefig(out_dir / "pca_scores_2d_by_condition.png", dpi=160)
         plt.close()
         print(f"[saved] {out_dir/'pca_scores_2d_by_condition.png'}")
 
-    # 3D
+    # 3D (best-effort annotation; true repel in 3D is non-trivial)
     if mode == "3d" and len(pcs) >= 3:
         from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-        fig = plt.figure(figsize=(8.5, 7.5))
+        import matplotlib.pyplot as plt
+        fig = plt.figure(figsize=(9, 7.6))
         ax = fig.add_subplot(111, projection="3d")
 
         for cat in categories:
             m = labeled_mask & (cond == cat)
             ax.scatter(scores_df.loc[m, pcs[0]], scores_df.loc[m, pcs[1]], scores_df.loc[m, pcs[2]],
                        s=32, alpha=0.95, label=str(cat))
-            if annotate:
-                for idx in scores_df.loc[m].index:
-                    x, y, z = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]], scores_df.loc[idx, pcs[2]]
-                    ax.text(x, y, z, str(idx), fontsize=8)
+            for idx in scores_df.loc[m].index:
+                x, y, z = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]], scores_df.loc[idx, pcs[2]]
+                ax.text(x, y, z, str(idx), fontsize=label_fontsize)
 
         if unlabeled_mask.any():
             ax.scatter(scores_df.loc[unlabeled_mask, pcs[0]], scores_df.loc[unlabeled_mask, pcs[1]],
                        scores_df.loc[unlabeled_mask, pcs[2]], s=32, alpha=0.6, label="(unlabeled)", marker="x")
-            if annotate:
-                for idx in scores_df.loc[unlabeled_mask].index:
-                    x, y, z = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]], scores_df.loc[idx, pcs[2]]
-                    ax.text(x, y, z, str(idx), fontsize=8)
+            for idx in scores_df.loc[unlabeled_mask].index:
+                x, y, z = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]], scores_df.loc[idx, pcs[2]]
+                ax.text(x, y, z, str(idx), fontsize=label_fontsize)
 
-        ax.set_xlabel(pcs[0]); ax.set_ylabel(pcs[1]); ax.set_zlabel(pcs[2])
-        ax.set_title(f"PCA Scores by Condition: {pcs[0]} vs {pcs[1]} vs {pcs[2]}")
+        ax.set_xlabel(f"{pcs[0]} ({pct1})", fontsize=axis_fontsize)
+        ax.set_ylabel(f"{pcs[1]} ({pct2})", fontsize=axis_fontsize)
+        if len(explained) >= 3:
+            pct3 = f"{(explained[2] * 100):.1f}%"
+            ax.set_zlabel(f"{pcs[2]} ({pct3})", fontsize=axis_fontsize)
+        ax.set_title(f"PCA Scores by Condition: {pcs[0]} vs {pcs[1]} vs {pcs[2]}", fontsize=axis_fontsize + 1)
         ax.legend(title="condition")
-        fig.tight_layout()
+        plt.tight_layout()
         fig.savefig(out_dir / "pca_scores_3d_by_condition.png", dpi=160)
         print(f"[saved] {out_dir/'pca_scores_3d_by_condition.png'}")
 
 
-def plot_scree_only(out_dir: Path, explained: np.ndarray) -> None:
+def plot_scree_only(out_dir: Path, explained: np.ndarray, axis_fontsize: int) -> None:
     _lazy_import_matplotlib()
     if not HAVE_MPL:
         print("[warn] matplotlib not available; skipping plots")
         return
 
     import matplotlib.pyplot as plt  # now safe
-    plt.figure(figsize=(7, 5))
+    plt.figure(figsize=(7.6, 5.4))
     xs = np.arange(1, len(explained) + 1)
     plt.bar(xs, explained)
     plt.plot(xs, np.cumsum(explained), marker="o")
-    plt.xlabel("Principal Component"); plt.ylabel("Variance Explained Ratio"); plt.title("Scree Plot")
-    plt.grid(True, linestyle="--", alpha=0.4); plt.tight_layout()
-    plt.savefig(out_dir / "scree_plot.png", dpi=160); plt.close()
+    plt.xlabel("Principal Component", fontsize=axis_fontsize)
+    plt.ylabel("Variance Explained Ratio", fontsize=axis_fontsize)
+    plt.title("Scree Plot", fontsize=axis_fontsize + 1)
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.tick_params(labelsize=max(axis_fontsize - 1, 1))
+    plt.tight_layout()
+    plt.savefig(out_dir / "scree_plot.png", dpi=160)
+    plt.close()
     print(f"[saved] {out_dir/'scree_plot.png'}")
 
 
@@ -360,7 +379,7 @@ def main():
     out_dir = ensure_out_dir(args.output_dir)
 
     # 1) Build matrix: rows=samples, cols=sites (values = %C or fraction)
-    X = build_matrix(args.input_dir, args.glob, args.delimiter, args.as_fraction, args.min_total)
+    X = build_matrix(args.input_dir, args.delimiter, args.as_fraction, args.min_total)
 
     # 2) Keep sites present in >= min_samples
     X = filter_sites_by_presence(X, args.min_samples)
@@ -371,13 +390,10 @@ def main():
     # 4) PCA via SVD
     scores_df, loadings_df, explained, cum_explained = pca_via_svd(Xp, args.n_components)
 
-    # 5) Save core tables
+    # 5) Save core tables (+ metadata if provided)
     meta_series = None
     if args.metadata:
-        meta_series = load_metadata_series(
-            args.metadata, args.metadata_delimiter, args.metadata_sample_col, args.metadata_condition_col
-        )
-        # warn about unmatched samples
+        meta_series = load_metadata_series(args.metadata, args.metadata_delimiter)
         unmatched = [s for s in scores_df.index if s not in meta_series.index]
         if unmatched:
             print(f"[warn] {len(unmatched)} samples have no metadata and will be unlabeled in plots:")
@@ -389,41 +405,53 @@ def main():
     save_tables(out_dir, X, scores_df, loadings_df, explained, cum_explained, meta_series)
 
     # 6) Plots
-    plot_scree_only(out_dir, explained)
-
+    plot_scree_only(out_dir, explained, args.axis_fontsize)
     if args.plot != "none":
         if meta_series is not None:
-            # Color by condition
-            plot_scores_colored(out_dir, scores_df, meta_series, args.plot, args.annotate_samples)
+            plot_scores_colored(out_dir, scores_df, meta_series, args.plot,
+                                explained, args.label_fontsize, args.axis_fontsize, args.label_repel_iter)
         else:
-            # No metadata: simple uncolored plot
+            # simple (no metadata) colored plot, still use % labels and repel
             _lazy_import_matplotlib()
             if HAVE_MPL:
                 import matplotlib.pyplot as plt
                 pcs = list(scores_df.columns)
                 if len(pcs) >= 2 and args.plot in ("2d", "3d"):
+                    pct1 = f"{(explained[0] * 100):.1f}%" if len(explained) >= 1 else ""
+                    pct2 = f"{(explained[1] * 100):.1f}%" if len(explained) >= 2 else ""
                     if args.plot == "2d":
-                        plt.figure(figsize=(7, 6))
-                        plt.scatter(scores_df[pcs[0]], scores_df[pcs[1]], s=28, alpha=0.85)
-                        if args.annotate_samples:
-                            for idx in scores_df.index:
-                                x, y = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]]
-                                plt.text(x, y, str(idx), fontsize=8, alpha=0.7)
-                        plt.xlabel(pcs[0]); plt.ylabel(pcs[1]); plt.title(f"PCA Scores: {pcs[0]} vs {pcs[1]}")
-                        plt.grid(True, linestyle="--", alpha=0.4); plt.tight_layout()
-                        plt.savefig(out_dir / "pca_scores_2d.png", dpi=160); plt.close()
+                        plt.figure(figsize=(8, 6.8))
+                        ax = plt.gca()
+                        ax.scatter(scores_df[pcs[0]], scores_df[pcs[1]], s=28, alpha=0.85)
+                        texts = []
+                        for idx in scores_df.index:
+                            x, y = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]]
+                            texts.append(ax.text(x, y, str(idx), fontsize=args.label_fontsize, alpha=0.85))
+                        if texts:
+                            _repel_texts(ax, texts, max_iter=args.label_repel_iter, move_px=0.6)
+                        ax.set_xlabel(f"{pcs[0]} ({pct1})", fontsize=args.axis_fontsize)
+                        ax.set_ylabel(f"{pcs[1]} ({pct2})", fontsize=args.axis_fontsize)
+                        ax.set_title(f"PCA Scores: {pcs[0]} vs {pcs[1]}", fontsize=args.axis_fontsize + 1)
+                        ax.grid(True, linestyle="--", alpha=0.4)
+                        ax.tick_params(labelsize=max(args.axis_fontsize - 1, 1))
+                        plt.tight_layout()
+                        plt.savefig(out_dir / "pca_scores_2d.png", dpi=160)
+                        plt.close()
                         print(f"[saved] {out_dir/'pca_scores_2d.png'}")
                     else:
                         from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-                        fig = plt.figure(figsize=(8, 7)); ax = fig.add_subplot(111, projection="3d")
+                        fig = plt.figure(figsize=(9, 7.6)); ax = fig.add_subplot(111, projection="3d")
                         ax.scatter(scores_df[pcs[0]], scores_df[pcs[1]], scores_df[pcs[2]], s=28, alpha=0.9)
-                        if args.annotate_samples:
-                            for idx in scores_df.index:
-                                x, y, z = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]], scores_df.loc[idx, pcs[2]]
-                                ax.text(x, y, z, str(idx), fontsize=8)
-                        ax.set_xlabel(pcs[0]); ax.set_ylabel(pcs[1]); ax.set_zlabel(pcs[2])
-                        ax.set_title(f"PCA Scores: {pcs[0]} vs {pcs[1]} vs {pcs[2]}")
-                        fig.tight_layout(); fig.savefig(out_dir / "pca_scores_3d.png", dpi=160)
+                        for idx in scores_df.index:
+                            x, y, z = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]], scores_df.loc[idx, pcs[2]]
+                            ax.text(x, y, z, str(idx), fontsize=args.label_fontsize)
+                        ax.set_xlabel(f"{pcs[0]} ({pct1})", fontsize=args.axis_fontsize)
+                        ax.set_ylabel(f"{pcs[1]} ({pct2})", fontsize=args.axis_fontsize)
+                        if len(explained) >= 3:
+                            pct3 = f"{(explained[2] * 100):.1f}%"
+                            ax.set_zlabel(f"{pcs[2]} ({pct3})", fontsize=args.axis_fontsize)
+                        ax.set_title(f"PCA Scores: {pcs[0]} vs {pcs[1]} vs {pcs[2]}", fontsize=args.axis_fontsize + 1)
+                        plt.tight_layout(); fig.savefig(out_dir / "pca_scores_3d.png", dpi=160)
                         print(f"[saved] {out_dir/'pca_scores_3d.png'}")
             else:
                 print("[warn] matplotlib not available; skipping score plot")
@@ -433,12 +461,13 @@ def main():
     print(f"Samples: {Xp.shape[0]} | Sites: {Xp.shape[1]} | Components: {len(explained)}")
     print("Explained variance ratios:", np.round(explained, 4))
     print("Cumulative explained:", np.round(cum_explained, 4))
-    if meta_series is not None:
-        counts = meta_series.reindex(scores_df.index).value_counts(dropna=False)
-        print("Samples per condition:")
-        for k, v in counts.items():
-            print(f"  {k}: {v}")
 
 
 if __name__ == "__main__":
+    # util defs placed after main for clarity in this snippet
+    def ensure_out_dir(path: str) -> Path:
+        out = Path(path)
+        out.mkdir(parents=True, exist_ok=True)
+        return out
+
     main()

@@ -1,9 +1,12 @@
 # Background
-Welcome to the package PryfynMeth. This aims to be a toolkit to aid with the analysis of insect methylation data. We have included separate subfolders for workthroughs with Whole Genome Bisulphite Sequencing data and Nanopore sequencing data, and example scripts for the whole pipeline for [Nanopore](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Nanopore_WorkFlow/Example_Workflow.sh).
+Welcome to the package PryfynMeth. PryfynMeth is a combination of tools designed to help the analysis of insect methylation data. It takes aligned data from Whole Genome Bisulphite Sequencing (WGBS) or Nanopore Sequencing datasets, performs a binomial test to help establish methylated sites, and formats the data for downstream differential methylation analyses. In addition to this, PryfynMeth can also: 
 
-# Documentation 
-See the [Full Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/Wiki) for setup instructions, usage, and deeper explanations.
+- Filter for coverage
+- Reduce the number of sites to get tested in differential methylation analyses
+- Combine all samples from the same treatment / tissue / sex to establish an overriding methylation pattern
+- Generate PCAs
 
+For further information, please examine the [Wiki documentation](https://github.com/C-L-Thomas/PryfynMeth/wiki/1.-Background-&-Rationale). The full pipeline for Nanopore sequencing can be found in the [Nanopore Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/2.-Nanopore-Workflow).
 
 # Installation
 Download the repository:
@@ -30,6 +33,8 @@ python PryfynMeth/pryfynmeth/binomial.py \
   -o test
 ```
 
+
+
 # Preprocessing
 PryfynMeth can accept three input file types; Nanopore [MethylBed](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Nanopore_WorkFlow/example_methyl.bed), [Bismark bismark_methylation_extractor reports (bisulphite stranded)](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_stranded.report.txt), and [Bismark coverage2cytosine cov files (bisulphite destranded)](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_destranded.cov). 
 
@@ -53,47 +58,6 @@ python pryfynmeth/bisulphite_preprocessing.py -i Input -o all_Input -type strand
 
 `-output_type` all, coverage or shared. Explained [here](). Note, if using destranded data, you will need an input "template" cov file in the position indicated by the hash. How to generate this will be explained [here](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/Creating_All_CpG_Cov_File/Script.sh).
 
-## Preprocessing: Nanopore Sequencing
-
-For Nanopore sequencing, these scripts function with the outputs of `modkit`. An example usage of modkit will be uploaded. There is a script included that can separate the methylation and hydroxymethylation into different files. This script `nanopore_prepare.py` also adds rows which have 0 coverage in the nanopore bed files. This is important for ensuring the FDR calculation is equal for all samples. However, before running `nanopore_prepare.py`, you must first generate a reference bed for your organism using modkit:
-
-```
-modkit motif bed reference.fasta CG 0 1> cg_motifs.bed
-```
-
-As a default, Modkit outputs will give you methylation and hydroxymethylation for sites with coverage. This leads to the problem that you are essentially doubling the number of input rows, which will have an impact on the binomial FDR. The `nanopore_preprocessing.py` command separates these into separate files, thus reducing the input files for FDR. There are three ways you can then decide to deal with this. The first is to proceed with with only the sites with coverage. This requires you only split methylation from hydroxymethylation. To run this:
-
-```
-python3 pryfynmeth/nanopore_preprocessing.py -i Input/
-````
-
-You may decide that this biases samples with a lower number of sites in the FDR. To resolve this, you may take one of two approaches. The first is to make sure that the files that will go through the binomial possess every CpG in the genome:
-
-```
-python3 pryfynmeth/nanopore_preprocessing.py -i Input/ -ref cpgs.bed 
-````
-
-Whilst this makes sure each sample is treated the same in the FDR, it does increase the number of sites included in the FDR calculation which may result in fewer sites being classified as methylated. To combat this whilst treating each sample equally, you may wish to remove genomic sites that don't posses coverage in any sample using the -reduce option:
-
-```
-python3 pryfynmeth/nanopore_preprocessing.py -i Input/ -ref cpgs.bed -reduce
-````
-
-`-i` - Input folder of modkit output bed files, which are in [this](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Nanopore_WorkFlow/example_methyl.bed) format
-
-`-ref` - File generated from modkit motif command outlined above
-
-`-reduce` - Keeps same number of rows between all samples, but removes sites that never have coverage
-
-A final step for the Nanopore preprocessing is to adjust the CG positions. For an unknown reason (I have contacted ONT), modkit files come out 1 position out of sync for + strand bases, and the start and end position is the wrong way around for - strand bases. The nanopore_adjust.py command fixes this before the binomial test:
-
-```
-python pryfynmeth/nanopore_adjust.py -i Input/
-````
-
-`-i` - Input folder (output from Nanopore_Prepare)
-
-This should generate a folder named adjusted_output.
 
 # Binomial Test 
 To determine whether an individual site is methylated in whole genome methylation sequencing, it's common practice to assess if the observed methylation level is significantly higher than what would be expected by chance. This is typically done by comparing the observed methylation proportion to a statistical threshold, often using a binomial test. In whole genome bisulphite sequencing and Nanopore sequencing, this threshold is determined by the percentage methylation found in lambda spiked DNA. To identify methylated sites, you can use the `binomial.py` command. 

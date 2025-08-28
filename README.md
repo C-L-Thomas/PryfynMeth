@@ -33,6 +33,8 @@ python PryfynMeth/pryfynmeth/binomial.py \
 # Preprocessing
 PryfynMeth can accept three input file types; Nanopore [MethylBed](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Nanopore_WorkFlow/example_methyl.bed), [Bismark bismark_methylation_extractor reports (bisulphite stranded)](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_stranded.report.txt), and [Bismark coverage2cytosine cov files (bisulphite destranded)](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_destranded.cov). 
 
+To find the full pipelines for each of these file types explore the [Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/). The Nanopore wiki can be found [here](https://github.com/C-L-Thomas/PryfynMeth/wiki/1.-Nanopore-Workflow).
+
 ## Preprocessing: Whole Genome Bisulphite Sequencing
 
 For Whole Genome Bisulphite Sequencing files, these scripts function with a particular output of the Bismark Aligner. There are two file type options; stranded and destranded. For stranded files, the file type is generated using Bismarks bismark_methylation_extractor command with the --report option. This will output a file that ends in *report.txt and is in [this](https://github.com/C-L-Thomas/PryfynMeth/blob/main/Bisulphite_Data/example_stranded.report.txt) format. This is the file input format for the binomial test `binomial.py`.

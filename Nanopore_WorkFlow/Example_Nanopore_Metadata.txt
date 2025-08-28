@@ -1,5 +1,0 @@
-sampleName	inputFile  lambda
-Sample_A	Sample_A_CpG_meth.bed  0.012
-Sample_B	Sample_B_CpG_meth.bed  0.012
-Sample_C	Sample_C_CpG_meth.bed  0.012
-Sample_D	Sample_D_CpG_meth.bed  0.012

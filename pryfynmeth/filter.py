@@ -157,7 +157,7 @@ def main():
     parser.add_argument("-m", "--methylated", required=True, help="Methylated significant output folder")
     parser.add_argument("-s", "--shared", required=True, help="Shared methylation output folder")
     parser.add_argument("-threshold", type=int, required=True, help="Coverage threshold")
-    parser.add_argument("-revert", action="store_true", help="Apply final revert step using original input")
+    parser.add_argument("-r", "--reverted", help="Reverted output folder (apply final revert step)")
 
     args = parser.parse_args()
 
@@ -181,10 +181,9 @@ def main():
     combined_keys = generate_combined_key_file(args.methylated, combined_key_file)
     filter_filtered_files_by_keys(args.filtered, args.shared, combined_keys)
 
-    if args.revert:
+    if args.reverted:
         print("[4/4] Reverting column 4 and 6 from input if values differ (with coverage >= 10 condition)...")
-        reverted_dir = os.path.join(os.path.dirname(args.shared), "reverted")
-        final_revert(args.shared, args.input, reverted_dir)
+        final_revert(args.shared, args.input, args.reverted)
 
     print("\u2705 Done!")
 

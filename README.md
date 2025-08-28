@@ -75,6 +75,10 @@ python pryfynmeth/filter.py  -i Binomial_Results_Folder -f output_adjusted_sites
 
 I find it easiest to run all options (filtered, methylated, subset and revert), which allows you to inspect how many sites proceed for each option, before making a decision for the next step.
 
+# Compatibility with Differential Methylation Analyses
+
+Currently, the only differential methylation toolkit that PryfynMeth is streamlined with is DSS. But if you have any additional requests please let me know.
+
 # Errors & Requests
 
 Whilst these scripts have been extensively trialed, errors may still occur. If you get any error messages, or any of the descriptions are unclear, please email **Christianluthomas@gmail.com**. Additionally, if you have any requests for additions to the pipeline feel free to email.

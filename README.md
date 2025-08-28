@@ -6,7 +6,7 @@ Welcome to the package PryfynMeth. PryfynMeth is a combination of tools designed
 - Combine all samples from the same treatment / tissue / sex to establish an overriding methylation pattern
 - Generate PCAs
 
-For further information, please examine the [Wiki documentation](https://github.com/C-L-Thomas/PryfynMeth/wiki/Home). The full pipeline for Nanopore sequencing can be found in the [Nanopore Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/1.-Nanopore-Workflow).
+For information on the full use of each script, please examine the [Wiki documentation](https://github.com/C-L-Thomas/PryfynMeth/wiki/Home). The full pipeline for Nanopore sequencing can be found in the [Nanopore Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/1.-Nanopore-Workflow). The full pipeline for WGBS Stranded data can be found in the [Stranded WGBS Workflow Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/1.-Stranded-WGBS-Workflow). The full pipeline for WGBS Destranded data can be found in the [Destranded WGBS Workflow Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/3.-Detranded-WGBS-Workflow).
 
 # Installation
 Download the repository:

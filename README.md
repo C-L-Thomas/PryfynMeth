@@ -109,17 +109,3 @@ To obtain the percentage of methylated sites, level of methylation and the cover
 python3 pryfynmeth/statistics.py -i input_folder
 
 ```
-
-# Prepare For Differential Methylation Analysis
-
-For use with [DSS](https://www.bioconductor.org/packages/devel/bioc/vignettes/DSS/inst/doc/DSS.html), you can use the dss_prepare.py command on either your binomial, filtered, methylated or shared folders:
-
-```
-python pryfynmeth/dss_prepare.py -i output_shared_sites -o DSS_folder
-
-```
-
-`-i` An input folder with the desired files to be used for DSS (eg. -f, -m or -s output from filter.py)
-
-`-o` An output folder for files in the DSS input format
-

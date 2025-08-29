@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "PryfynMeth: Tools for DNA methylation site analysis"
+version: "1.0.0"
+doi: 10.5281/zenodo.8475
+authors:
+  - family-names: "Thomas"
+    given-names: "Christian L"
+    orcid: "https://orcid.org/0000-0002-7449-116X"
+  - family-names: "Mallon"
+    given-names: "Eamonn B"
+    orcid: "https://orcid.org/0000-0002-4198-4611"
+date-released: 2025-08-29
+url: "https://github.com/C-L-Thomas/PryfynMeth"

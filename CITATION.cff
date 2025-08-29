@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "PryfynMeth: Tools for DNA methylation site analysis"
+title: "PryfynMeth: A Python Package Streamlining Insect Methylation Analyses"
 version: "1.0.0"
 doi: 10.5281/zenodo.8475
 authors:

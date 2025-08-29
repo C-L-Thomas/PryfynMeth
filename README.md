@@ -54,3 +54,6 @@ Currently, the only differential methylation toolkit that PryfynMeth is streamli
 Whilst these scripts have been extensively trialed, errors may still occur. If you get any error messages, or any of the descriptions are unclear, please email **Christianluthomas@gmail.com**. Additionally, if you have any requests for additions to the pipeline feel free to email.
 
 # Citations
+For citations please use:
+
+Thomas, C. L., & Mallon, E. B. (2025). PryfynMeth: A Python Package Streamlining Insect Methylation Analyses (v1.0.0). Zenodo. https://doi.org/10.5281/zenodo.16992737

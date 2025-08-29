@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "PryfynMeth: A Python Package Streamlining Insect Methylation Analyses"
 version: "1.0.0"
-doi: 10.5281/zenodo.8475
+doi: 10.5281/zenodo.16992737
 authors:
   - family-names: "Thomas"
     given-names: "Christian L"

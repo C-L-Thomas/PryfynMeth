@@ -3,21 +3,23 @@
 PCA from per-sample site tables using only NumPy/Pandas (no scikit-learn)
 
 - Reads all *.txt (tab-delimited) in --input-dir
-- Builds site key "chr:pos:strand"
+- Builds site key "chr:pos:strand" (you may drop strand if desired)
 - Value = (C / total) * 100 unless --as-fraction
 - Optional metadata: 2 columns [sample, condition]
-- Plots (if matplotlib available) with:
+- Plots (2D/3D) with:
   * PC axis labels showing % variance explained
-  * ALWAYS annotated sample labels
-  * Label de-overlap (2D) via a small built-in repel algorithm
-  * Font-size controls for labels and axes
+  * ALWAYS annotated sample labels colored like their points
+  * Column-wise label stacking by x (in pixel space)
+  * Small x-jitter per stacked label to avoid perfect columns
+  * Vertical leader lines point -> label
+  * White halo around text for legibility
 """
 
 import argparse
 import glob
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -57,8 +59,6 @@ def parse_args():
     p.add_argument("--plot", choices=["2d", "3d", "none"], default="2d", help="Plot PCA scores.")
     p.add_argument("--label-fontsize", type=int, default=9, help="Font size for sample labels (default: 9).")
     p.add_argument("--axis-fontsize", type=int, default=12, help="Font size for axis titles & ticks (default: 12).")
-    p.add_argument("--label-repel-iter", type=int, default=200,
-                   help="Max iterations for label de-overlap in 2D (default: 200).")
     # metadata (fixed columns: sample, condition)
     p.add_argument("--metadata", "-m", help="Path to metadata file (TSV/CSV) with columns: sample, condition.")
     p.add_argument("--metadata-delimiter", default="\t", help="Delimiter for metadata file (default: tab).")
@@ -93,6 +93,7 @@ def read_and_summarize_sample(path: str, sep: str, as_fraction: bool, min_total:
     if df.empty:
         return pd.Series(dtype=float, name=sample_name_from_path(path))
 
+    # NOTE: if you want strand-collapsed CpGs, change to key = chr:pos
     df["modifier"] = df["chr"].astype(str) + ":" + df["pos"].astype(str) + ":" + df["strand"].astype(str)
     grp = df.groupby("modifier", as_index=False)[["c", "total"]].sum()
     frac = grp["c"] / grp["total"]
@@ -195,7 +196,7 @@ def load_metadata_series(path: str, sep: str) -> pd.Series:
     if "sample" not in md.columns or "condition" not in md.columns:
         raise ValueError("Metadata needs columns 'sample' and 'condition' (case-insensitive).")
     stems = md["sample"].astype(str).apply(lambda x: Path(x).stem)
-    cond = md["condition"]
+    cond = md["condition"].astype(str).str.strip()
     meta = pd.Series(cond.values, index=stems, name="condition")
     return meta
 
@@ -231,47 +232,101 @@ def save_tables(out_dir: Path, matrix_samples_x_sites: pd.DataFrame,
         print(f"[saved] {joined_path}")
 
 
-# ---------- Label de-overlap helper (2D) ----------
-def _repel_texts(ax, texts: List["matplotlib.text.Text"], max_iter: int = 200, move_px: float = 0.5):
-    """Simple, dependency-free text repel in display coordinates; adjusts text positions in data coords."""
+# ---------- Label helpers ----------
+def _get_scatter_color(sc) -> Tuple[float, float, float, float]:
+    fc = sc.get_facecolors()
+    if fc is not None and len(fc):
+        return tuple(fc[0])
+    ec = sc.get_edgecolors()
+    if ec is not None and len(ec):
+        return tuple(ec[0])
+    return (0, 0, 0, 1)
+
+
+def _shorten_label(name: str) -> str:
+    for p in ("Nanopore_", "WGBS_"):
+        if name.startswith(p):
+            return name[len(p):]
+    return name
+
+
+def _stack_labels_by_x(ax, texts: List["matplotlib.text.Text"], anchors: List[Tuple[float, float]],
+                       min_gap_px: float = 4.0, x_bucket_px: float = 18.0,
+                       x_jitter_px: float = 6.0, top_margin_px: float = 12.0):
+    """
+    Deterministic column stacking:
+    - Bucket points whose anchor x-values are within ~x_bucket_px in display space.
+    - For each bucket, sort by anchor y and place labels in a vertical stack with min_gap_px spacing.
+    - Apply small left/right jitter so labels don't form a perfect column.
+    - Cap label positions below the top of the axes by top_margin_px.
+    """
     import matplotlib.pyplot as plt  # noqa: F401
     fig = ax.figure
     fig.canvas.draw()
     renderer = fig.canvas.get_renderer()
-    inv = ax.transData.inverted()
+    trans = ax.transData
+    inv = trans.inverted()
 
-    for _ in range(max_iter):
-        moved = False
-        bboxes = [t.get_window_extent(renderer).expanded(1.06, 1.12) for t in texts]  # small padding
-        for i in range(len(texts)):
-            for j in range(i + 1, len(texts)):
-                if bboxes[i].overlaps(bboxes[j]):
-                    # push apart
-                    dx_pix = move_px
-                    dy_pix = move_px
-                    # convert pixel deltas to data-space deltas
-                    dx = inv.transform((dx_pix, 0)) - inv.transform((0, 0))
-                    dy = inv.transform((0, dy_pix)) - inv.transform((0, 0))
-                    xi, yi = texts[i].get_position()
-                    xj, yj = texts[j].get_position()
-                    texts[i].set_position((xi - dx[0], yi + dy[1]))
-                    texts[j].set_position((xj + dx[0], yj - dy[1]))
-                    moved = True
-        if not moved:
-            break
-    fig.canvas.draw()
+    # anchors in display coords
+    pts_disp = trans.transform(np.array(anchors))
+    xs = pts_disp[:, 0]
+    ys = pts_disp[:, 1]
+
+    # bucket by rounded pixel x
+    buckets = {}
+    for i, xpix in enumerate(xs):
+        key = int(round(xpix / x_bucket_px))
+        buckets.setdefault(key, []).append(i)
+
+    ax_bbox = ax.get_window_extent(renderer)
+    y_cap = ax_bbox.y1 - top_margin_px  # do not cross plot top
+
+    for key, idxs in buckets.items():
+        # sort by anchor y (ascending)
+        idxs.sort(key=lambda i: ys[i])
+
+        # get label heights in pixels
+        heights = []
+        for i in idxs:
+            # Use a tiny fudge to ensure bbox exists
+            bb = texts[i].get_window_extent(renderer).expanded(1.0, 1.0)
+            heights.append(bb.height)
+
+        # stack
+        prev_top = None
+        for rank, i in enumerate(idxs):
+            xpix, ypix = xs[i], ys[i]
+            # baseline: just above the point by min_gap_px
+            target_bottom = ypix + min_gap_px
+            if prev_top is None:
+                bottom = target_bottom
+            else:
+                bottom = max(target_bottom, prev_top + min_gap_px)
+            top = bottom + heights[rank]
+            # cap at top of axes
+            if top > y_cap:
+                top = y_cap
+                bottom = top - heights[rank]
+
+            # add small left/right jitter by rank
+            jitter = ((-1) ** rank) * (x_jitter_px * (rank // 2))
+
+            x_data, y_data = inv.transform((xpix + jitter, bottom))
+            texts[i].set_position((x_data, y_data))
+            prev_top = top
 
 
 # ---------- Plotting ----------
 def plot_scores_colored(out_dir: Path, scores_df: pd.DataFrame, cond: pd.Series, mode: str,
-                        explained: np.ndarray, label_fontsize: int, axis_fontsize: int, repel_iter: int) -> None:
-    """Color points by condition, ALWAYS annotate sample names, add % variance to axis labels."""
+                        explained: np.ndarray, label_fontsize: int, axis_fontsize: int) -> None:
     _lazy_import_matplotlib()
     if not HAVE_MPL:
         print("[warn] matplotlib not available; skipping plots")
         return
 
     import matplotlib.pyplot as plt  # now safe
+    import matplotlib.patheffects as pe
+
     pcs = list(scores_df.columns)
     if len(pcs) < 2 or mode == "none":
         return
@@ -279,33 +334,49 @@ def plot_scores_colored(out_dir: Path, scores_df: pd.DataFrame, cond: pd.Series,
     cond = cond.reindex(scores_df.index)
     labeled_mask = cond.notna()
     unlabeled_mask = ~labeled_mask
-    cats = pd.Categorical(cond[labeled_mask])
-    categories = list(cats.categories)
+    categories = list(pd.Categorical(cond[labeled_mask]).categories)
 
     pct1 = f"{(explained[0] * 100):.1f}%" if len(explained) >= 1 else ""
     pct2 = f"{(explained[1] * 100):.1f}%" if len(explained) >= 2 else ""
 
     # 2D
     if mode in ("2d", "3d"):
-        plt.figure(figsize=(8, 6.8))
+        plt.figure(figsize=(9.5, 7.5))
         ax = plt.gca()
-        texts = []
-        for cat in categories:
-            m = labeled_mask & (cond == cat)
-            ax.scatter(scores_df.loc[m, pcs[0]], scores_df.loc[m, pcs[1]], s=32, alpha=0.9, label=str(cat))
-            for idx in scores_df.loc[m].index:
-                x, y = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]]
-                texts.append(ax.text(x, y, str(idx), fontsize=label_fontsize, alpha=0.85))
-        if unlabeled_mask.any():
-            ax.scatter(scores_df.loc[unlabeled_mask, pcs[0]], scores_df.loc[unlabeled_mask, pcs[1]],
-                       s=32, alpha=0.6, label="(unlabeled)", marker="x")
-            for idx in scores_df.loc[unlabeled_mask].index:
-                x, y = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]]
-                texts.append(ax.text(x, y, str(idx), fontsize=label_fontsize, alpha=0.8))
 
-        # repel labels (2D)
+        texts: List["matplotlib.text.Text"] = []
+        anchors: List[Tuple[float, float]] = []
+        colors: List[Tuple[float, float, float, float]] = []
+
+        def _add_group(mask, legend_label):
+            sc = ax.scatter(scores_df.loc[mask, pcs[0]], scores_df.loc[mask, pcs[1]],
+                            s=36, alpha=0.9, label=str(legend_label))
+            col = _get_scatter_color(sc)
+            for idx in scores_df.loc[mask].index:
+                x = scores_df.loc[idx, pcs[0]]
+                y = scores_df.loc[idx, pcs[1]]
+                label = _shorten_label(str(idx))
+                # start label slightly above point; exact stack happens later
+                t = ax.text(x, y, label,
+                            fontsize=label_fontsize, color=col, ha="center", va="bottom",
+                            path_effects=[pe.withStroke(linewidth=2.2, foreground="white")])
+                texts.append(t); anchors.append((x, y)); colors.append(col)
+
+        for cat in categories:
+            _add_group(labeled_mask & (cond == cat), cat)
+        if unlabeled_mask.any():
+            _add_group(unlabeled_mask, "(unlabeled)")
+
+        # column stacking by x (in pixel space)
         if texts:
-            _repel_texts(ax, texts, max_iter=repel_iter, move_px=0.6)
+            _stack_labels_by_x(ax, texts, anchors,
+                               min_gap_px=4.0, x_bucket_px=18.0,
+                               x_jitter_px=6.0, top_margin_px=12.0)
+
+        # leader lines from point -> final label position
+        for (x, y), t, col in zip(anchors, texts, colors):
+            x2, y2 = t.get_position()
+            ax.plot([x, x2], [y, y2], lw=0.8, alpha=0.7, color=col, zorder=0)
 
         ax.set_xlabel(f"{pcs[0]} ({pct1})", fontsize=axis_fontsize)
         ax.set_ylabel(f"{pcs[1]} ({pct2})", fontsize=axis_fontsize)
@@ -318,27 +389,28 @@ def plot_scores_colored(out_dir: Path, scores_df: pd.DataFrame, cond: pd.Series,
         plt.close()
         print(f"[saved] {out_dir/'pca_scores_2d_by_condition.png'}")
 
-    # 3D (best-effort annotation; true repel in 3D is non-trivial)
+    # 3D (unchanged apart from centered labels)
     if mode == "3d" and len(pcs) >= 3:
         from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-        import matplotlib.pyplot as plt
         fig = plt.figure(figsize=(9, 7.6))
         ax = fig.add_subplot(111, projection="3d")
 
         for cat in categories:
             m = labeled_mask & (cond == cat)
-            ax.scatter(scores_df.loc[m, pcs[0]], scores_df.loc[m, pcs[1]], scores_df.loc[m, pcs[2]],
-                       s=32, alpha=0.95, label=str(cat))
+            sc = ax.scatter(scores_df.loc[m, pcs[0]], scores_df.loc[m, pcs[1]], scores_df.loc[m, pcs[2]],
+                            s=32, alpha=0.95, label=str(cat))
+            col = _get_scatter_color(sc)
             for idx in scores_df.loc[m].index:
                 x, y, z = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]], scores_df.loc[idx, pcs[2]]
-                ax.text(x, y, z, str(idx), fontsize=label_fontsize)
+                ax.text(x, y, z, str(idx), fontsize=label_fontsize, color=col, ha="center")
 
         if unlabeled_mask.any():
-            ax.scatter(scores_df.loc[unlabeled_mask, pcs[0]], scores_df.loc[unlabeled_mask, pcs[1]],
-                       scores_df.loc[unlabeled_mask, pcs[2]], s=32, alpha=0.6, label="(unlabeled)", marker="x")
+            sc = ax.scatter(scores_df.loc[unlabeled_mask, pcs[0]], scores_df.loc[unlabeled_mask, pcs[1]],
+                            scores_df.loc[unlabeled_mask, pcs[2]], s=32, alpha=0.6, label="(unlabeled)", marker="x")
+            col = _get_scatter_color(sc)
             for idx in scores_df.loc[unlabeled_mask].index:
                 x, y, z = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]], scores_df.loc[idx, pcs[2]]
-                ax.text(x, y, z, str(idx), fontsize=label_fontsize)
+                ax.text(x, y, z, str(idx), fontsize=label_fontsize, color=col, ha="center")
 
         ax.set_xlabel(f"{pcs[0]} ({pct1})", fontsize=axis_fontsize)
         ax.set_ylabel(f"{pcs[1]} ({pct2})", fontsize=axis_fontsize)
@@ -409,26 +481,34 @@ def main():
     if args.plot != "none":
         if meta_series is not None:
             plot_scores_colored(out_dir, scores_df, meta_series, args.plot,
-                                explained, args.label_fontsize, args.axis_fontsize, args.label_repel_iter)
+                                explained, args.label_fontsize, args.axis_fontsize)
         else:
-            # simple (no metadata) colored plot, still use % labels and repel
+            # simple (no metadata) plot with same label treatment
             _lazy_import_matplotlib()
             if HAVE_MPL:
                 import matplotlib.pyplot as plt
+                import matplotlib.patheeffects as pe
                 pcs = list(scores_df.columns)
                 if len(pcs) >= 2 and args.plot in ("2d", "3d"):
                     pct1 = f"{(explained[0] * 100):.1f}%" if len(explained) >= 1 else ""
                     pct2 = f"{(explained[1] * 100):.1f}%" if len(explained) >= 2 else ""
                     if args.plot == "2d":
-                        plt.figure(figsize=(8, 6.8))
+                        plt.figure(figsize=(9.5, 7.5))
                         ax = plt.gca()
-                        ax.scatter(scores_df[pcs[0]], scores_df[pcs[1]], s=28, alpha=0.85)
-                        texts = []
+                        sc = ax.scatter(scores_df[pcs[0]], scores_df[pcs[1]], s=36, alpha=0.9)
+                        col = _get_scatter_color(sc)
+                        texts = []; anchors = []
                         for idx in scores_df.index:
                             x, y = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]]
-                            texts.append(ax.text(x, y, str(idx), fontsize=args.label_fontsize, alpha=0.85))
+                            t = ax.text(x, y, str(idx), fontsize=args.label_fontsize, color=col,
+                                        ha="center", va="bottom",
+                                        path_effects=[pe.withStroke(linewidth=2.2, foreground="white")])
+                            texts.append(t); anchors.append((x, y))
                         if texts:
-                            _repel_texts(ax, texts, max_iter=args.label_repel_iter, move_px=0.6)
+                            _stack_labels_by_x(ax, texts, anchors)
+                        for (x, y), t in zip(anchors, texts):
+                            x2, y2 = t.get_position()
+                            ax.plot([x, x2], [y, y2], lw=0.8, alpha=0.7, color=col, zorder=0)
                         ax.set_xlabel(f"{pcs[0]} ({pct1})", fontsize=args.axis_fontsize)
                         ax.set_ylabel(f"{pcs[1]} ({pct2})", fontsize=args.axis_fontsize)
                         ax.set_title(f"PCA Scores: {pcs[0]} vs {pcs[1]}", fontsize=args.axis_fontsize + 1)
@@ -438,21 +518,6 @@ def main():
                         plt.savefig(out_dir / "pca_scores_2d.png", dpi=160)
                         plt.close()
                         print(f"[saved] {out_dir/'pca_scores_2d.png'}")
-                    else:
-                        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-                        fig = plt.figure(figsize=(9, 7.6)); ax = fig.add_subplot(111, projection="3d")
-                        ax.scatter(scores_df[pcs[0]], scores_df[pcs[1]], scores_df[pcs[2]], s=28, alpha=0.9)
-                        for idx in scores_df.index:
-                            x, y, z = scores_df.loc[idx, pcs[0]], scores_df.loc[idx, pcs[1]], scores_df.loc[idx, pcs[2]]
-                            ax.text(x, y, z, str(idx), fontsize=args.label_fontsize)
-                        ax.set_xlabel(f"{pcs[0]} ({pct1})", fontsize=args.axis_fontsize)
-                        ax.set_ylabel(f"{pcs[1]} ({pct2})", fontsize=args.axis_fontsize)
-                        if len(explained) >= 3:
-                            pct3 = f"{(explained[2] * 100):.1f}%"
-                            ax.set_zlabel(f"{pcs[2]} ({pct3})", fontsize=args.axis_fontsize)
-                        ax.set_title(f"PCA Scores: {pcs[0]} vs {pcs[1]} vs {pcs[2]}", fontsize=args.axis_fontsize + 1)
-                        plt.tight_layout(); fig.savefig(out_dir / "pca_scores_3d.png", dpi=160)
-                        print(f"[saved] {out_dir/'pca_scores_3d.png'}")
             else:
                 print("[warn] matplotlib not available; skipping score plot")
 
@@ -464,10 +529,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # util defs placed after main for clarity in this snippet
-    def ensure_out_dir(path: str) -> Path:
-        out = Path(path)
-        out.mkdir(parents=True, exist_ok=True)
-        return out
-
     main()

@@ -2,9 +2,10 @@ import os
 import sys
 import scipy.stats as stats
 
-# Function to perform binomial test
+# Function to perform one-sided binomial test (testing if methylation > background)
 def perform_binomial_test(successes, total, lambda_value):
-    return stats.binomtest(successes, total, lambda_value, alternative='two-sided').pvalue
+    # One-sided alternative: test if observed methylation rate is greater than lambda background rate
+    return stats.binomtest(successes, total, lambda_value, alternative='greater').pvalue
 
 # Function to perform FDR correction using Benjamini-Hochberg
 def fdr_correction(p_values):
@@ -46,7 +47,7 @@ def read_input_nano(file_path):
             try:
                 chr = fields[0]
                 pos = fields[1]
-                strand = fields[5]  # ✅ Corrected: use column 6 for strand
+                strand = fields[5]  # ✅ use column 6 for strand
                 total = int(fields[4])     # Column 5 (0-based index 4)
                 C = int(fields[11])        # Column 12 (0-based index 11)
                 T = int(fields[12])        # Column 13 (0-based index 12)
@@ -157,4 +158,4 @@ for row in metadata:
 
     print(f"[INFO] Processed {len(results)} rows for sample '{sample_name}'. Output saved to '{output_file}'.")
 
-print("✅ Processing complete.")
+print("✅ Processing complete (one-sided binomial test used).")

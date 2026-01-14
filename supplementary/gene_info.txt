@@ -1,0 +1,4 @@
+chr  start	end	strand	geneID
+chr1	34567	35678	+	GeneA
+chr1	40000	42000	-	GeneB
+chr2	100000	101500	+	GeneC

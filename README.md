@@ -8,7 +8,7 @@ Welcome to the package PryfynMeth. PryfynMeth is a combination of tools designed
 - Generate [Alignment Statistics](https://github.com/C-L-Thomas/PryfynMeth/wiki/6.-Statistics)
 - Perform base letter [motif enrichment](https://github.com/C-L-Thomas/PryfynMeth/wiki/7.-Motif-Enrichment)
 
-For information on the full use of each script, please examine the [Wiki documentation](https://github.com/C-L-Thomas/PryfynMeth/wiki/Home). The full pipeline for Nanopore sequencing can be found in the [Nanopore Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/1.-Nanopore-Workflow). The full pipeline for WGBS Stranded data can be found in the [Stranded WGBS Workflow Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/1.-Stranded-WGBS-Workflow). The full pipeline for WGBS Destranded data can be found in the [Destranded WGBS Workflow Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/3.-Detranded-WGBS-Workflow).
+For information on the full use of each script, please examine the [Wiki documentation](https://github.com/C-L-Thomas/PryfynMeth/wiki/Home). The full pipeline for Nanopore sequencing can be found in the [Nanopore Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/1.-Nanopore-Workflow). The full pipeline for WGBS Stranded data can be found in the [Stranded WGBS Workflow Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/2.-Stranded-WGBS-Workflow). The full pipeline for WGBS Destranded data can be found in the [Destranded WGBS Workflow Section of the Wiki](https://github.com/C-L-Thomas/PryfynMeth/wiki/3.-Detranded-WGBS-Workflow).
 
 # Installation
 Download the repository:
